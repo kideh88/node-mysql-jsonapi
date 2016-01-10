@@ -1,0 +1,36 @@
+{
+  "name": "node-mysql-jsonapi",
+  "version": "0.1.0",
+  "description": "Combining NodeJs with a MySQL database with resonses in JSONAPI structure",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": "5.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kideh88/node-mysql-jsonapi.git"
+  },
+  "keywords": [
+    "node",
+    "nodejs",
+    "mysql",
+    "api",
+    "jsonapi",
+    "json",
+    "serializer",
+    "database"
+  ],
+  "author": "Kim Dehmlow",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kideh88/node-mysql-jsonapi/issues"
+  },
+  "homepage": "https://github.com/kideh88/node-mysql-jsonapi#readme",
+  "dependencies": {
+    "jsonapi-serializer": "2.0.4",
+    "mysql": "2.10.0"
+  }
+}
