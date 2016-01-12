@@ -4,7 +4,8 @@
   "description": "Combining NodeJs with a MySQL database with resonses in JSONAPI structure",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "test": "echo \"NO TESTS AVAILABLE\""
   },
   "engines": {
     "node": "5.2.0"
@@ -32,5 +33,10 @@
   "dependencies": {
     "jsonapi-serializer": "2.0.4",
     "mysql": "2.10.0"
+  },
+  "devDependencies": {
+    "gulp": "^3.9.0",
+    "gulp-jscs": "^2.0.0",
+    "gulp-jshint": "^1.11.2"
   }
 }
