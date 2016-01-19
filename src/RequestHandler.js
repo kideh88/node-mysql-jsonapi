@@ -1,20 +1,40 @@
 'use strict';
 
+let ERROR_CODE = require('./httpResponseCodes');
+
 class RequestHandler {
 
-    constructor(Database) {
-        this.database = Database;
-        //this.queryHelper = QueryHelper;
+  constructor (Database, QueryBuilder, JsonApiQueryParser) {
+    this.database = Database;
+    this.queryBuilder = QueryBuilder;
+    this.queryParser = JsonApiQueryParser;
+    this.ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'DELETE']
+  }
+
+  isMethodAllowed (method) {
+    return (this.ALLOWED_METHODS.indexOf(method) !== -1);
+  };
+
+  delegate (request) {
+    let requestData = this.queryParser.parseRequest(request.url);
+
+    console.log(requestData);
+
+    if (!this.isMethodAllowed(request.method)) {
+      return this.rejectRequest(ERROR_CODE.HTTP_METHOD_NOT_ALLOWED);
+    } else {
+      //var sqlStatement = this.queryBuilder.getStatement(request.url); // contains /api/article
+      var sqlStatement = 'SELECT * FROM article';
+      return this.database[request.method.toLowerCase()](sqlStatement);
     }
 
-    delegate(request) {
+  }
 
-        //var statement = this.queryHelper.getStatement(request.url);
-        var statement = 'SELECT * FROM article';
-        //this.queryHelper.getMethod(request.url));
-        console.log(request.url);
-        return this.database.get(statement);
-    }
+  rejectRequest (responseCode) {
+    return new Promise ((resolve, reject) => {
+      reject(responseCode)
+    });
+  }
 
 }
 

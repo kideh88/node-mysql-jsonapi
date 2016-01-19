@@ -1,17 +1,24 @@
 'use strict';
 
-let RequestHandler = require('./RequestHandler');
-let ResponseHandler = require('./ResponseHandler');
-let MySqlDatabase = require('./Database');
+let MySql = require('mysql');
 
-class DataHook {
+class MySqlDatabase {
 
   constructor(config) {
-    this.connection = new MySqlDatabase(config);
-    this.requestHandler = new RequestHandler(this.connection);
-    this.responseHandler = new ResponseHandler();
+    this.mysql = MySql;
+    this.connection = this.mysql.createConnection(config);
+    this.connection.connect();
+  }
+
+  get(statement) {
+    return new Promise((resolve, reject) => {
+      //resolve('hello');
+      this.connection.query(statement, function (err, rows, fields) {
+        resolve(rows);
+      });
+    });
   }
 
 }
 
-module.exports = DataHook;
+module.exports = MySqlDatabase;

@@ -3,13 +3,18 @@
 let RequestHandler = require('./RequestHandler');
 let ResponseHandler = require('./ResponseHandler');
 let MySqlDatabase = require('./Database');
+let QueryBuilder = require('./QueryBuilder');
+let JsonApiQueryParser = require('./JsonApiQueryParser');
 
 class DataHook {
 
-  constructor(config) {
-      this.connection = new MySqlDatabase(config);
-      this.requestHandler = new RequestHandler(this.connection);
-      this.responseHandler = new ResponseHandler();
+  constructor(connectionConfig, databaseSchema) {
+    this.connection = new MySqlDatabase(connectionConfig);
+    //this.queryBuilder = new QueryBuilder(databaseSchema);
+    this.queryBuilder = '';
+    this.queryParser = new JsonApiQueryParser();
+    this.requestHandler = new RequestHandler(this.connection, this.queryBuilder, this.queryParser);
+    this.responseHandler = new ResponseHandler();
   }
 
 }
