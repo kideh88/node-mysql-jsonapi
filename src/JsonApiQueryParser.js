@@ -58,7 +58,7 @@ class JsonApiQueryParser {
     let requestSplit = JsonApiQueryParser.trimSlashes(endpointString).split('/');
     requestObject.resourceType = requestSplit[0];
     requestObject.identifier = (requestSplit.length === 2 ? requestSplit[1] : null);
-    requestObject.relationships = (requestSplit.length === 3 && requestSplit[2] === 'relationships');
+    requestObject.relationships = (requestSplit.length === 3 && requestSplit[2].toLowerCase() === 'relationships');
     if(requestObject.relationships) {
       if(!requestSplit[3]) {
         throw new ReferenceError('Request missing relationship type', 'JsonApiQueryParser.js');
@@ -116,7 +116,7 @@ class JsonApiQueryParser {
    **/
   static parseInclude (includeString, _requestDataSubset) {
     // Kept simple for now, does not parse dot-separated relationships (comment.user)
-    let targetString = includeString.replace('include=', '');
+    let targetString = includeString.toLowerCase().replace('include=', '');
     _requestDataSubset.include = targetString.split(',');
 
     return _requestDataSubset;
@@ -189,7 +189,7 @@ class JsonApiQueryParser {
    *
    **/
   static parseSort (sortString, _requestDataSubset) {
-    let targetString = sortString.replace('sort=', '');
+    let targetString = sortString.toLowerCase().replace('sort=', '');
     _requestDataSubset.sort = targetString.split(',');
 
     return _requestDataSubset;
