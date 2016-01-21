@@ -1,5 +1,5 @@
 {
-  "name": "node-mysql-jsonapi",
+  "name": "mysql-jsonapi",
   "version": "0.1.0",
   "description": "Combining NodeJs with a MySQL database with resonses in JSONAPI structure",
   "main": "index.js",
@@ -31,6 +31,8 @@
   },
   "homepage": "https://github.com/kideh88/node-mysql-jsonapi#readme",
   "dependencies": {
+    "http-response-codes": "^1.0.0",
+    "jsonapi-query-parser": "^1.1.0",
     "jsonapi-serializer": "2.0.4",
     "mysql": "2.10.0"
   },

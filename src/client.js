@@ -4,7 +4,7 @@ let RequestHandler = require('./RequestHandler');
 let ResponseHandler = require('./ResponseHandler');
 let MySqlDatabase = require('./Database');
 let QueryBuilder = require('./QueryBuilder');
-let JsonApiQueryParser = require('./JsonApiQueryParser');
+let JsonApiQueryParser = require('jsonapi-query-parser');
 
 class DataHook {
 

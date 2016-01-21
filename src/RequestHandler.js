@@ -1,6 +1,6 @@
 'use strict';
 
-let ERROR_CODE = require('./httpResponseCodes');
+let ERROR_CODE = require('http-response-codes');
 
 class RequestHandler {
 
@@ -15,18 +15,22 @@ class RequestHandler {
     return (this.ALLOWED_METHODS.indexOf(method) !== -1);
   };
 
-  delegate (request) {
-    let requestData = this.queryParser.parseRequest(request.url);
-
-    console.log(requestData);
-
+  run (request) {
     if (!this.isMethodAllowed(request.method)) {
       return this.rejectRequest(ERROR_CODE.HTTP_METHOD_NOT_ALLOWED);
-    } else {
-      //var sqlStatement = this.queryBuilder.getStatement(request.url); // contains /api/article
-      var sqlStatement = 'SELECT * FROM article';
-      return this.database[request.method.toLowerCase()](sqlStatement);
     }
+
+    try {
+      let requestData = this.queryParser.parseRequest(request.url);
+    }
+    catch (exception) {
+      this.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
+    }
+
+    //var sqlStatement = this.queryBuilder.getStatement(request.url); // contains /api/article
+    var sqlStatement = 'SELECT * FROM article';
+    return this.database[request.method.toLowerCase()](sqlStatement);
+
 
   }
 
