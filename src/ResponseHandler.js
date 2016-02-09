@@ -2,10 +2,15 @@
 
 class ResponseHandler {
 
-    constructor() {
+    constructor () {
     }
 
-    respond(data, response) {
+    respondWithSuccess (rows, fields, response) {
+        response.writeHead(200, { 'Content-Type': 'text/plain' });
+        response.end(rows);
+    }
+
+    respondWithError (error, response) {
         response.writeHead(200, { 'Content-Type': 'text/plain' });
         response.end(data);
     }
