@@ -1,6 +1,8 @@
 # node-mysql-jsonapi
 # DataHook
 
+ ** Still early stage project, no releases made yet! **
+
 DataHook is a lightweight NodeJs application for JSON-API spec communication.
 First implementation will only contain a MySQL connector. Other databases should be easy to implement at later times.
 
