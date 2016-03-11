@@ -6,12 +6,14 @@ class ResponseHandler {
     }
 
     respondWithSuccess (rows, fields, response) {
-        response.writeHead(200, { 'Content-Type': 'text/plain' });
+        response.writeHead(200, { 'Content-Type': 'application/vnd.api+json' });
         response.end(rows);
     }
 
     respondWithError (error, response) {
-        response.writeHead(200, { 'Content-Type': 'text/plain' });
+        // Wrong content type requests need to state correct accept header?
+        //"accept": 'application/vnd.api+json'
+        response.writeHead(200, { 'Content-Type': 'application/vnd.api+json' });
         response.end(data);
     }
 

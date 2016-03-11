@@ -1,0 +1,3 @@
+{
+  "ignore": ["config/*.js", "Ignore config file changes"]
+}

@@ -1,22 +1,23 @@
 'use strict';
 
-let MySqlDatabase = require('./Database');
 let JsonApiQueryBuilder = require('./JsonApiQueryBuilder');
 let JsonApiQueryParser = require('jsonapi-query-parser');
 let ERROR_CODE = require('http-response-codes');
 
 class RequestHandler {
 
-  constructor (config) {
-    this.database = new MySqlDatabase(config);
-    this.queryBuilder = new JsonApiQueryBuilder();
+  constructor (DataHook) {
+    // Authentication here or on client DataHook? lets you add/remove/select other auth types
+    //this.authService = new AuthenticationService();
+    console.log('RequestHandler is constructed');
+    this.DataHook = DataHook;
     this.queryParser = new JsonApiQueryParser();
+    this.queryBuilder = new JsonApiQueryBuilder();
+    this.maxRequestBodySize = (this.DataHook.NODE_CONFIG.MAX_REQUEST_SIZE ? this.DataHook.NODE_CONFIG.MAX_REQUEST_SIZE : 1e6);
 
-    this.ALLOWED_METHODS = ['get', 'post', 'patch', 'delete'];
-    this.ALLOWED_HEADERS = {
-      "Content-Type": 'application/vnd.api+json',
-      "Accept": 'application/vnd.api+json'
-    };
+    this.ALLOWED_METHODS = this.DataHook.NODE_CONFIG.ALLOWED_METHODS;
+    this.ALLOWED_CONTENT_TYPE = this.DataHook.NODE_CONFIG.CONTENT_TYPE;
+
   };
 
   run (request) {
@@ -25,13 +26,18 @@ class RequestHandler {
       return this.rejectRequest(ERROR_CODE.HTTP_METHOD_NOT_ALLOWED);
     }
 
-    if(request.get('Content-Type') !== this.ALLOWED_HEADERS["Content-Type"] || request.get('Accept') !== this.ALLOWED_HEADERS["Accept"]){
-      console.log('no match on header');
+    let hasBodyContent = request.headers.hasOwnProperty('content-type');
+    if(hasBodyContent) {
+      if (this.ALLOWED_CONTENT_TYPE.indexOf(request.headers['content-type']) === -1) {
+        return this.rejectRequest(ERROR_CODE.HTTP_NOT_ACCEPTABLE);
+      }
     }
 
     try {
+      console.log('run try prepare');
       this.prepareRequestPromise(request, requestMethod).then(
         function(databasePromise) {
+          console.log('databasePromise', databasePromise);
           return databasePromise;
         },
         function() {
@@ -41,28 +47,38 @@ class RequestHandler {
       );
     }
     catch (exception) {
+      console.log(exception);
       // @TODO: FIGURE OUT CORRECT ERROR FROM EXCEPTION!! move code to response handler?
       return this.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
     }
   }
 
-  prepareRequestPromise (request, requestMethod) {
+  prepareRequestPromise (request, requestMethod, hasBodyContent) {
     let requestData = this.queryParser.parseRequest(request.url);
     let bodyData = '';
+    let handler = this;
+    request.on('error', function (error) {
+      // @TODO: figure out error error
+      // USE DATAHOOK.on Event to broadcast an error?
+      console.log('error in prepareRequestPromise', error);
+      return handler.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
+    });
     request.on('data', function(chunk) {
       bodyData += chunk;
-      if(bodyData.length > maxSize) {
+      if(bodyData.length > handler.maxRequestBodySize) {
         bodyData = "";
-        return this.rejectRequest(ERROR_CODE.HTTP_REQUEST_ENTITY_TOO_LARGE);
+        return handler.rejectRequest(ERROR_CODE.HTTP_REQUEST_ENTITY_TOO_LARGE);
       }
     });
     request.on('end', function() {
-      requestData.body = JSON.parse(bodyData);
-      if (requestBody.data.type !== requestData.resourceType) {
-        return this.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
+      if (hasBodyContent && bodyData.length > 0) {
+        requestData.body = JSON.parse(bodyData);
       }
-      let sqlStatement = this.queryBuilder.buildStatement(requestMethod, requestData);
-      return this.database[requestMethod](sqlStatement);
+      if (requestData.body && requestData.body.data && requestData.body.data.type !== requestData.resourceType) {
+        return handler.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
+      }
+      let sqlStatement = handler.queryBuilder.buildStatement(requestMethod, requestData);
+      return handler.DataHook.database[requestMethod](sqlStatement);
     });
   };
 
