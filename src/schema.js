@@ -1,8 +1,8 @@
 'use strict';
 
-const DHUtilities = require('./DataHookUtilities');
+const DHUtilities = require('./utilities');
 const FileSystem = require('fs');
-let Scanner = {};
+let Scanner;
 
 /**
  * Set and remap the given information schema data to a usable mapping object in this.dataStructure
@@ -21,15 +21,24 @@ class SchemaFactory {
 
       if(this.DataHook.DB_TYPE !== this.DataHook.dataStructure.DB_TYPE) {
         console.log('DataHook structure config does not match given DB_TYPE');
-        console.log('Please check your DataHook config and restart!');
+        console.log('Please check your DataHook config or remove the current schema file and restart!');
         process.exit();
       }
     } catch (error) {
-      console.log('No existing data structure file found. Now scaffolding to: ' + this.NODE_CONFIG.DATA_STRUCTURE_JSON);
+      console.log('No existing valid data structure file found. Now scaffolding to: ' + this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON);
       this.scaffoldStructureConfig();
     }
 
+  }
 
+  /**
+   * Adds functions to the schema, tables and columns of the dataStructure
+   *
+   * @return void
+   **/
+  addSchemaPrototypes () {
+
+    // IN PROGRESS
     let tableName, columnName;
 
 
@@ -51,8 +60,6 @@ class SchemaFactory {
     }
 
     Object.setPrototypeOf(schema, Schema.prototype);
-
-
   }
 
   /**
@@ -72,7 +79,7 @@ class SchemaFactory {
         }
       );
     } catch (error) {
-      console.log('DataHook.scaffoldStructureConfig Error: ', error);
+      console.log('SchemaFactory.scaffoldStructureConfig Error: ', error);
       process.exit();
     }
   }

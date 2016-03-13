@@ -1,13 +1,13 @@
 'use strict';
 
-let MySql = require('mysql');
+let mysql = require('mysql');
 
 // @TODO: Rename file to contain MySQL to avoid later conflicts
-class MySqlDatabase {
+class Database {
 
   constructor (MYSQL_CONFIG) {
     this.CONFIG = MYSQL_CONFIG;
-    this.mysql = MySql;
+    this.mysql = mysql;
     this.connection = this.mysql.createConnection({
       host: MYSQL_CONFIG.HOST,
       port: MYSQL_CONFIG.PORT,
@@ -146,4 +146,4 @@ class MySqlDatabase {
 
 }
 
-module.exports = MySqlDatabase;
+module.exports = Database;

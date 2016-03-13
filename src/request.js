@@ -1,23 +1,21 @@
 'use strict';
 
-let JsonApiQueryBuilder = require('./JsonApiQueryBuilder');
-let JsonApiQueryParser = require('jsonapi-query-parser');
-let ERROR_CODE = require('http-response-codes');
+let JsonApiQueryBuilder;
+const ERROR_CODE = require('http-response-codes');
+const JsonApiQueryParser = require('jsonapi-query-parser');
 
 class RequestHandler {
 
   constructor (DataHook) {
-    // Authentication here or on client DataHook? lets you add/remove/select other auth types
-    //this.authService = new AuthenticationService();
-    console.log('RequestHandler is constructed');
     this.DataHook = DataHook;
+    JsonApiQueryBuilder = require('./query/' + DataHook.DB_TYPE.toLowerCase());
+
     this.queryParser = new JsonApiQueryParser();
     this.queryBuilder = new JsonApiQueryBuilder();
     this.maxRequestBodySize = (this.DataHook.NODE_CONFIG.MAX_REQUEST_SIZE ? this.DataHook.NODE_CONFIG.MAX_REQUEST_SIZE : 1e6);
 
     this.ALLOWED_METHODS = this.DataHook.NODE_CONFIG.ALLOWED_METHODS;
     this.ALLOWED_CONTENT_TYPE = this.DataHook.NODE_CONFIG.CONTENT_TYPE;
-
   };
 
   run (request) {
