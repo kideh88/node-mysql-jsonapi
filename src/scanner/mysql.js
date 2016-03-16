@@ -26,13 +26,15 @@ class Scanner {
       dataStructure[row.TABLE_NAME]['INVERSE_RELATIONS'] = {};
       dataStructure[row.TABLE_NAME]['RELATIONS'] = {};
       dataStructure[row.TABLE_NAME][row.COLUMN_NAME] = {
-        data_type: row.DATA_TYPE,
-        simplified_type: MySQLScanner.getSimplifiedType(row.DATA_TYPE),
-        select_modifier: false,
-        is_nullable: row.IS_NULLABLE,
-        is_primaryKey: false,
-        is_restricted: false,
-        is_foreignKey: false
+        COLUMN_INFO: {
+          dataType: row.DATA_TYPE,
+          simplifiedType: MySQLScanner.getSimplifiedType(row.DATA_TYPE),
+          selectModifier: false,
+          isNullable: row.IS_NULLABLE,
+          isPrimaryKey: false,
+          isRestricted: false,
+          isForeignKey: false
+        }
       };
     }
 
@@ -44,7 +46,7 @@ class Scanner {
       }
 
       if('PRIMARY' === row.CONSTRAINT_NAME) {
-        dataStructure[row.TABLE_NAME][row.COLUMN_NAME].is_primaryKey = true;
+        dataStructure[row.TABLE_NAME][row.COLUMN_NAME].COLUMN_INFO.isPrimaryKey = true;
       } else {
 
         if(!dataStructure[row.REFERENCED_TABLE_NAME] || !dataStructure[row.REFERENCED_TABLE_NAME][row.REFERENCED_COLUMN_NAME]){
@@ -52,22 +54,22 @@ class Scanner {
             + row.REFERENCED_TABLE_NAME + ' Column: ' + row.REFERENCED_COLUMN_NAME);
         }
 
-        dataStructure[row.TABLE_NAME][row.COLUMN_NAME].is_foreignKey = true;
+        dataStructure[row.TABLE_NAME][row.COLUMN_NAME].COLUMN_INFO.isForeignKey = true;
 
         let aliasReplace = 'ALIASFOR' + row.REFERENCED_TABLE_NAME + row.REFERENCED_COLUMN_NAME;
         dataStructure[row.TABLE_NAME]['RELATIONS'][aliasReplace] = {
           'column': row.COLUMN_NAME,
           'name': row.CONSTRAINT_NAME,
-          'target_table': row.REFERENCED_TABLE_NAME,
-          'target_column': row.REFERENCED_COLUMN_NAME
+          'targetTable': row.REFERENCED_TABLE_NAME,
+          'targetColumn': row.REFERENCED_COLUMN_NAME
         };
 
         let referenceAliasReplace = 'ALIASFOR' + row.TABLE_NAME + row.COLUMN_NAME;
         dataStructure[row.REFERENCED_TABLE_NAME]['INVERSE_RELATIONS'][referenceAliasReplace] = {
           'column': row.REFERENCED_COLUMN_NAME,
           'name': row.CONSTRAINT_NAME,
-          'from_table': row.TABLE_NAME,
-          'from_column': row.COLUMN_NAME
+          'fromFable': row.TABLE_NAME,
+          'fromColumn': row.COLUMN_NAME
         };
       }
     }
@@ -82,11 +84,11 @@ class Scanner {
    * @return simple_type string
    **/
   static getSimplifiedType (type) {
-    let simple_type;
+    let simpleType;
     type = type.toUpperCase();
-    for(simple_type in dataTypeMapping) {
-      if(dataTypeMapping.hasOwnProperty(simple_type) && dataTypeMapping[simple_type].indexOf(type) > -1) {
-        return simple_type;
+    for(simpleType in dataTypeMapping) {
+      if(dataTypeMapping.hasOwnProperty(simpleType) && dataTypeMapping[simpleType].indexOf(type) > -1) {
+        return simpleType;
       }
     }
     throw new Error('Scanner getSimplifiedType failed with given type: ' + type);

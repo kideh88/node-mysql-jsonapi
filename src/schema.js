@@ -18,16 +18,20 @@ class SchemaFactory {
     try{
       FileSystem.accessSync(this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON, FileSystem.R_OK);
       this.DataHook.dataStructure = JSON.parse(FileSystem.readFileSync(this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON, 'utf8'));
-
       if(this.DataHook.DB_TYPE !== this.DataHook.dataStructure.DB_TYPE) {
         console.log('DataHook structure config does not match given DB_TYPE');
         console.log('Please check your DataHook config or remove the current schema file and restart!');
         process.exit();
       }
+
     } catch (error) {
+      console.log('SchemaFactory constructor error', error);
       console.log('No existing valid data structure file found. Now scaffolding to: ' + this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON);
       this.scaffoldStructureConfig();
     }
+
+    delete this.DataHook.dataStructure.DB_TYPE;
+    this.addSchemaPrototypes(this.DataHook.dataStructure);
 
   }
 
@@ -36,30 +40,21 @@ class SchemaFactory {
    *
    * @return void
    **/
-  addSchemaPrototypes () {
+  addSchemaPrototypes (schema) {
 
     // IN PROGRESS
     let tableName, columnName;
 
-
     for (tableName in schema) {
       for (columnName in schema[tableName]) {
-        if(columnName === 'INVERSE_RELATIONS') {
-          // Set relation functions
-          // getInverseRelations
-        } else if(columnName === 'RELATIONS') {
-          // Set relation functions
-          // getRelations
-        } else {
-          Object.setPrototypeOf(schema[tableName][columnName], Column.prototype);
-        }
-        if(columnName === 'title') {
+        Object.setPrototypeOf(schema[tableName][columnName], Column.prototype);
+        if (columnName === 'title') {
           console.log('function test', schema[tableName][columnName].isHidden());
         }
       }
     }
 
-    Object.setPrototypeOf(schema, Schema.prototype);
+    //Object.setPrototypeOf(schema, Schema.prototype);
   }
 
   /**
@@ -108,20 +103,16 @@ class SchemaFactory {
 }
 
 class Schema {
-  hasTable () {
-    console.log(this);
-    return false;
+  _hasTable (input) {
+    return this.hasOwnProperty(input);
   }
 }
 
 class Table {
-  getSelectorArray () {
+  _getSelectorArray () {
     return ['table.column1', 'table.column2'];
   }
 }
-
-
-
 
 class Column {
 
@@ -130,8 +121,8 @@ class Column {
    *
    * @return boolean
    **/
-  isRestricted () {
-    return this.is_restricted;
+  _isRestricted () {
+    return this.COLUMN_INFO.isRestricted;
   }
 
   /**
@@ -139,8 +130,8 @@ class Column {
    *
    * @return boolean
    **/
-  isNullable () {
-    return (this.is_nullable === 'YES');
+  _isNullable () {
+    return (this.COLUMN_INFO.isNullable === 'YES');
   }
 
   /**
@@ -148,8 +139,8 @@ class Column {
    *
    * @return boolean
    **/
-  isPrimaryKey () {
-    return this.is_primaryKey;
+  _isPrimaryKey () {
+    return this.COLUMN_INFO.isPrimaryKey;
   }
 
   /**
@@ -157,8 +148,8 @@ class Column {
    *
    * @return boolean
    **/
-  isForeignKey () {
-    return this.is_foreignKey;
+  _isForeignKey () {
+    return this.COLUMN_INFO.isForeignKey;
   }
 
   /**
@@ -166,8 +157,39 @@ class Column {
    *
    * @return boolean
    **/
-  hasSelectModifier () {
-    return (this.select_modifier !== false);
+  _hasSelectModifier () {
+    return (this.COLUMN_INFO.selectModifier !== false);
+  }
+
+  /**
+   * Returns boolean on whether this column has a relation to the given alias input
+   *
+   * @param input string
+   * @return boolean
+   **/
+  _hasRelation (input) {
+    return (this.RELATIONS.hasOwnProperty(input) || this.INVERSE_RELATIONS.hasOwnProperty(input));
+  }
+
+  /**
+   * Returns a relation object for this column
+   *
+   * @param input string
+   * @return object
+   **/
+  _getRelation (input) {
+    let relation = {};
+    if(!this._hasRelation(input)) {
+      return relation;
+    }
+    if(this.RELATIONS.hasOwnProperty(input)) {
+      relation.type = 'DIRECT';
+      relation = Object.assign(relation, this.RELATIONS[input]);
+    } else {
+      relation.type = 'INVERSE';
+      relation = Object.assign(relation, this.INVERSE_RELATIONS[input]);
+    }
+    return relation;
   }
 
   /**
@@ -176,8 +198,8 @@ class Column {
    * @param input mixed
    * @return mixed
    **/
-  castInput (input) {
-    switch(typeof this.simplified_type) {
+  _castInput (input) {
+    switch(typeof this.simplifiedType) {
       case 'string':
         return input.toString();
       case 'number':
