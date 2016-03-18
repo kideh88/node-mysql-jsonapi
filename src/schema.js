@@ -41,20 +41,20 @@ class SchemaFactory {
    * @return void
    **/
   addSchemaPrototypes (schema) {
-
-    // IN PROGRESS
     let tableName, columnName;
 
     for (tableName in schema) {
-      for (columnName in schema[tableName]) {
-        Object.setPrototypeOf(schema[tableName][columnName], Column.prototype);
-        if (columnName === 'title') {
-          console.log('function test', schema[tableName][columnName].isHidden());
+      if (schema.hasOwnProperty(tableName)) {
+        Object.setPrototypeOf(schema[tableName], Table.prototype);
+        for (columnName in schema[tableName]) {
+          if (schema[tableName].hasOwnProperty(columnName) && columnName !== 'TABLE_INFO') {
+            Object.setPrototypeOf(schema[tableName][columnName], Column.prototype);
+          }
         }
       }
     }
 
-    //Object.setPrototypeOf(schema, Schema.prototype);
+    Object.setPrototypeOf(schema, Schema.prototype);
   }
 
   /**
@@ -66,7 +66,7 @@ class SchemaFactory {
     try {
       this.DataHook.database.scanDatabaseStructure().then(
         (schemaData) => {
-          Scanner.generateDataStructure(schemaData);
+          this.DataHook.dataStructure = Scanner.generateDataStructure(schemaData);
           this.writeConfigToFile();
         },
         (error) => {
@@ -103,76 +103,51 @@ class SchemaFactory {
 }
 
 class Schema {
+  /**
+   * Returns boolean on whether this schema has a table with the given name input.
+   *
+   * @param input string
+   * @return boolean
+   **/
   _hasTable (input) {
     return this.hasOwnProperty(input);
   }
 }
 
 class Table {
+
+  /**
+   * Returns the SELECT array for this table.
+   *
+   * @return array
+   **/
   _getSelectorArray () {
-    return ['table.column1', 'table.column2'];
-  }
-}
-
-class Column {
-
-  /**
-   * Returns boolean on whether this column is restricted
-   *
-   * @return boolean
-   **/
-  _isRestricted () {
-    return this.COLUMN_INFO.isRestricted;
-  }
-
-  /**
-   * Returns boolean on whether this column is allowed to be null
-   *
-   * @return boolean
-   **/
-  _isNullable () {
-    return (this.COLUMN_INFO.isNullable === 'YES');
+    let tableName = this.TABLE_INFO.NAME;
+    let key, selectors = [];
+    for (key in this) {
+      if (this.hasOwnProperty(key) && this[key] instanceof Column && !this[key]._isForeignKey() && !this[key]._isRestricted()) {
+        if (this[key]._hasSelectModifier()) {
+          selectors.push(this[key]._getSelectModifier());
+        } else {
+          selectors.push(tableName + '.' + key);
+        }
+      }
+    }
+    return selectors;
   }
 
   /**
-   * Returns boolean on whether this column is a primary key
-   *
-   * @return boolean
-   **/
-  _isPrimaryKey () {
-    return this.COLUMN_INFO.isPrimaryKey;
-  }
-
-  /**
-   * Returns boolean on whether this column is a foreign key
-   *
-   * @return boolean
-   **/
-  _isForeignKey () {
-    return this.COLUMN_INFO.isForeignKey;
-  }
-
-  /**
-   * Returns boolean on whether this column has a SELECT modifier
-   *
-   * @return boolean
-   **/
-  _hasSelectModifier () {
-    return (this.COLUMN_INFO.selectModifier !== false);
-  }
-
-  /**
-   * Returns boolean on whether this column has a relation to the given alias input
+   * Returns boolean on whether this column has a relation to the given alias input.
    *
    * @param input string
    * @return boolean
    **/
   _hasRelation (input) {
-    return (this.RELATIONS.hasOwnProperty(input) || this.INVERSE_RELATIONS.hasOwnProperty(input));
+    return (this.TABLE_INFO.RELATIONS.hasOwnProperty(input) || this.TABLE_INFO.INVERSE_RELATIONS.hasOwnProperty(input));
   }
 
   /**
-   * Returns a relation object for this column
+   * Returns a relation object for this column.
    *
    * @param input string
    * @return object
@@ -182,18 +157,78 @@ class Column {
     if(!this._hasRelation(input)) {
       return relation;
     }
-    if(this.RELATIONS.hasOwnProperty(input)) {
+    if(this.TABLE_INFO.RELATIONS.hasOwnProperty(input)) {
       relation.type = 'DIRECT';
-      relation = Object.assign(relation, this.RELATIONS[input]);
+      relation = Object.assign(relation, this.TABLE_INFO.RELATIONS[input]);
     } else {
       relation.type = 'INVERSE';
-      relation = Object.assign(relation, this.INVERSE_RELATIONS[input]);
+      relation = Object.assign(relation, this.TABLE_INFO.INVERSE_RELATIONS[input]);
     }
     return relation;
   }
+}
+
+class Column {
 
   /**
-   * Typecast the json input values to their types provided by the data.structure.json
+   * Returns boolean on whether this column is restricted.
+   *
+   * @return boolean
+   **/
+  _isRestricted () {
+    return this.COLUMN_INFO.isRestricted;
+  }
+
+  /**
+   * Returns boolean on whether this column is allowed to be null.
+   *
+   * @return boolean
+   **/
+  _isNullable () {
+    return (this.COLUMN_INFO.isNullable === 'YES');
+  }
+
+  /**
+   * Returns boolean on whether this column is a primary key.
+   *
+   * @return boolean
+   **/
+  _isPrimaryKey () {
+    return this.COLUMN_INFO.isPrimaryKey;
+  }
+
+  /**
+   * Returns boolean on whether this column is a foreign key.
+   *
+   * @return boolean
+   **/
+  _isForeignKey () {
+    return this.COLUMN_INFO.isForeignKey;
+  }
+
+  /**
+   * Returns boolean on whether this column has a SELECT modifier.
+   *
+   * @return boolean
+   **/
+  _hasSelectModifier () {
+    return (this.COLUMN_INFO.selectModifier !== false);
+  }
+
+  /**
+   * Returns the SELECT modifier for this column.
+   *
+   * @return boolean
+   **/
+  _getSelectModifier () {
+    if (!this.hasSelectModifier()) {
+      return null;
+    }
+    return this.COLUMN_INFO.selectModifier;
+  }
+
+  /**
+   * Typecast the json input values to their types provided by the data.structure.json.
    *
    * @param input mixed
    * @return mixed
@@ -207,10 +242,8 @@ class Column {
       case 'boolean':
         return DHUtilities.stringToBoolean(input);
       case 'float':
-        // To match price floats
         return parseFloat(input).toFixed(2);
       case 'timestamp':
-        // To match UNIX inserts
         return parseInt(input);
       default:
         return input.toString();
@@ -218,6 +251,5 @@ class Column {
   }
 
 }
-
 
 module.exports = SchemaFactory;

@@ -19,7 +19,7 @@ class DataHook extends EventEmitter {
   constructor(CONFIG) {
     super();
     this.NODE_CONFIG = CONFIG.NODE;
-    this.DB_TYPE = DATA_HOOK.DB_TYPE;
+    this.DB_TYPE = CONFIG.DB_TYPE;
     this.dependencyFileCheck();
 
     Database = require('./database/' + this.DB_TYPE.toLowerCase());
@@ -45,10 +45,11 @@ class DataHook extends EventEmitter {
    **/
   dependencyFileCheck () {
     try{
-      FileSystem.accessSync('database/' + this.DB_TYPE.toLowerCase(), FileSystem.R_OK);
-      FileSystem.accessSync('query/' + this.DB_TYPE.toLowerCase(), FileSystem.R_OK);
-      FileSystem.accessSync('scanner/' + this.DB_TYPE.toLowerCase(), FileSystem.R_OK);
+      FileSystem.accessSync('src/database/' + this.DB_TYPE.toLowerCase() + '.js', FileSystem.R_OK);
+      FileSystem.accessSync('src/query/' + this.DB_TYPE.toLowerCase() + '.js', FileSystem.R_OK);
+      FileSystem.accessSync('src/scanner/' + this.DB_TYPE.toLowerCase() + '.js', FileSystem.R_OK);
     } catch(error) {
+      console.log(error);
       console.log('DataHook is missing adapter files in database, query, scanner directory or config DB_TYPE has been misspelled.');
       console.log('Please check adapters and your DataHook config file!');
       process.exit();

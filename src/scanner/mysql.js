@@ -23,12 +23,15 @@ class Scanner {
       let row = data.structure[index];
 
       dataStructure[row.TABLE_NAME] = (dataStructure[row.TABLE_NAME] ? dataStructure[row.TABLE_NAME] : {});
-      dataStructure[row.TABLE_NAME]['INVERSE_RELATIONS'] = {};
-      dataStructure[row.TABLE_NAME]['RELATIONS'] = {};
+      dataStructure[row.TABLE_NAME]['TABLE_INFO'] = {
+        'NAME': row.TABLE_NAME,
+        'INVERSE_RELATIONS': {},
+        'RELATIONS': {}
+      };
       dataStructure[row.TABLE_NAME][row.COLUMN_NAME] = {
         COLUMN_INFO: {
           dataType: row.DATA_TYPE,
-          simplifiedType: MySQLScanner.getSimplifiedType(row.DATA_TYPE),
+          simplifiedType: Scanner.getSimplifiedType(row.DATA_TYPE),
           selectModifier: false,
           isNullable: row.IS_NULLABLE,
           isPrimaryKey: false,
@@ -57,7 +60,7 @@ class Scanner {
         dataStructure[row.TABLE_NAME][row.COLUMN_NAME].COLUMN_INFO.isForeignKey = true;
 
         let aliasReplace = 'ALIASFOR' + row.REFERENCED_TABLE_NAME + row.REFERENCED_COLUMN_NAME;
-        dataStructure[row.TABLE_NAME]['RELATIONS'][aliasReplace] = {
+        dataStructure[row.TABLE_NAME]['TABLE_INFO']['RELATIONS'][aliasReplace] = {
           'column': row.COLUMN_NAME,
           'name': row.CONSTRAINT_NAME,
           'targetTable': row.REFERENCED_TABLE_NAME,
@@ -65,10 +68,10 @@ class Scanner {
         };
 
         let referenceAliasReplace = 'ALIASFOR' + row.TABLE_NAME + row.COLUMN_NAME;
-        dataStructure[row.REFERENCED_TABLE_NAME]['INVERSE_RELATIONS'][referenceAliasReplace] = {
+        dataStructure[row.REFERENCED_TABLE_NAME]['TABLE_INFO']['INVERSE_RELATIONS'][referenceAliasReplace] = {
           'column': row.REFERENCED_COLUMN_NAME,
           'name': row.CONSTRAINT_NAME,
-          'fromFable': row.TABLE_NAME,
+          'fromTable': row.TABLE_NAME,
           'fromColumn': row.COLUMN_NAME
         };
       }
@@ -96,4 +99,4 @@ class Scanner {
 
 }
 
-module.exports.Scanner = Scanner;
+module.exports = Scanner;
