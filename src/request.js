@@ -1,94 +1,195 @@
 'use strict';
 
-let JsonApiQueryBuilder;
+let JsonApiQuery;
 const ERROR_CODE = require('http-response-codes');
 const JsonApiQueryParser = require('jsonapi-query-parser');
+const DataHookError = require('./utilities').DataHookError;
 
 class RequestHandler {
 
   constructor (DataHook) {
     this.DataHook = DataHook;
-    JsonApiQueryBuilder = require('./query/' + DataHook.DB_TYPE.toLowerCase());
+    JsonApiQuery = require('./query/' + DataHook.DB_TYPE.toLowerCase());
 
     this.queryParser = new JsonApiQueryParser();
-    this.queryBuilder = new JsonApiQueryBuilder();
     this.maxRequestBodySize = (this.DataHook.NODE_CONFIG.MAX_REQUEST_SIZE ? this.DataHook.NODE_CONFIG.MAX_REQUEST_SIZE : 1e6);
 
     this.ALLOWED_METHODS = this.DataHook.NODE_CONFIG.ALLOWED_METHODS;
-    this.ALLOWED_CONTENT_TYPE = this.DataHook.NODE_CONFIG.CONTENT_TYPE;
+    this.ALLOWED_CONTENT_TYPE = 'application/vnd.api+json';
+    this.headers = {
+      'Content-Type': 'application/vnd.api+json',
+      'Accept': 'application/vnd.api+json'
+    }
   };
 
-  run (request) {
-    let requestMethod = request.method.toLowerCase();
-    if (!this.isMethodAllowed(requestMethod)) {
-      return this.rejectRequest(ERROR_CODE.HTTP_METHOD_NOT_ALLOWED);
-    }
-
-    let hasBodyContent = request.headers.hasOwnProperty('content-type');
-    if(hasBodyContent) {
-      if (this.ALLOWED_CONTENT_TYPE.indexOf(request.headers['content-type']) === -1) {
-        return this.rejectRequest(ERROR_CODE.HTTP_NOT_ACCEPTABLE);
-      }
-    }
+  /**
+   * Run a node request, given directly through the http request listener.
+   *
+   * @param request object
+   * @param response object
+   * @return void
+   **/
+  run (request, response) {
+    let requestMethod;
 
     try {
-      console.log('run try prepare');
-      this.prepareRequestPromise(request, requestMethod).then(
-        function(databasePromise) {
-          console.log('databasePromise', databasePromise);
-          return databasePromise;
-        },
-        function() {
-          // @TODO: FIGURE OUT CORRECT ERROR FROM EXCEPTION!! move code to response handler?
-          return this.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
-        }
-      );
+      requestMethod = request.method.toLowerCase();
+      this.methodAllowed(requestMethod);
+      this.setRequestListeners(request, response);
     }
-    catch (exception) {
-      console.log(exception);
-      // @TODO: FIGURE OUT CORRECT ERROR FROM EXCEPTION!! move code to response handler?
-      return this.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
+    catch (error) {
+      console.log('RequestHandler.run ', error);
+      this.rejectRequest(response, error);
     }
   }
 
-  prepareRequestPromise (request, requestMethod, hasBodyContent) {
+  /**
+   * Sets all the callbacks for the node request events.
+   *
+   * @param request object
+   * @param response object
+   * @return void
+   **/
+  setRequestListeners (request, response) {
     let requestData = this.queryParser.parseRequest(request.url);
-    let bodyData = '';
-    let handler = this;
-    request.on('error', function (error) {
-      // @TODO: figure out error error
-      // USE DATAHOOK.on Event to broadcast an error?
-      console.log('error in prepareRequestPromise', error);
-      return handler.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
-    });
-    request.on('data', function(chunk) {
+    let requestMethod = request.method.toLowerCase();
+    // Set empty object string for later JSON.parse.
+    let bodyData = '{}';
+
+    request.on('error', this.requestError);
+    request.on('data', this.requestDataStreamCallback(bodyData));
+    request.on('end', this.requestExecuteCallback(request, requestMethod, requestData, bodyData, response));
+  };
+
+  /**
+   * Callback for the node on 'end' event. Executes the request to the database.
+   *
+   * @param request object
+   * @param requestMethod string
+   * @param requestData object
+   * @param bodyData string
+   * @param response object
+   * @return void
+   **/
+  requestExecuteCallback (request, requestMethod, requestData, bodyData, response) {
+    return () => {
+      if (bodyData !== '{}') {
+        this.checkContentHeader(request.headers);
+      }
+      requestData.body = this.setRequestBody(bodyData, requestData.resourceType);
+
+      // @TODO: MOVE THIS TO ITS OWN FUNCTION WITH TRANSACTION CALLS FOR MULTIPLE STATEMENTS
+      let databaseRequest = new JsonApiQuery(this.DataHook.schema, requestMethod, requestData);
+      this.DataHook.database[requestMethod](databaseRequest.queries[0], this.querySuccess, this.queryError);
+    }
+  }
+
+  querySuccess (data) {
+    // successCallback wrapper so database doesnt need response/request passed into
+    console.log('querySuccess data', data);
+  }
+
+  queryError (error) {
+    // errorCallback wrapper so database doesnt need response/request passed into
+    console.log('queryError error', error);
+  }
+
+  /**
+   * Parses the given body data and throws DataHookError if the given resourceType does not match the endpoint.
+   *
+   * @param bodyData string
+   * @param resourceType string
+   * @return void
+   **/
+  setRequestBody (bodyData, resourceType) {
+    let requestBody = JSON.parse(bodyData);
+    if (requestBody && requestBody.data && requestBody.data.type !== resourceType) {
+      throw new DataHookError('request.js', 'setRequestBody', 'Wrong resource type', ERROR_CODE.HTTP_BAD_REQUEST);
+    }
+    return requestBody;
+  }
+
+  /**
+   * Data stream callback for node on 'data' event. Throws DataHookError if request body is too big.
+   *
+   * @param bodyData string
+   * @return void
+   **/
+  requestDataStreamCallback (bodyData) {
+    return (chunk) => {
       bodyData += chunk;
-      if(bodyData.length > handler.maxRequestBodySize) {
+      if(bodyData.length > this.maxRequestBodySize) {
         bodyData = "";
-        return handler.rejectRequest(ERROR_CODE.HTTP_REQUEST_ENTITY_TOO_LARGE);
+        throw new DataHookError('request.js', 'prepareRequestPromise', 'Entity too large', ERROR_CODE.HTTP_REQUEST_ENTITY_TOO_LARGE);
       }
-    });
-    request.on('end', function() {
-      if (hasBodyContent && bodyData.length > 0) {
-        requestData.body = JSON.parse(bodyData);
-      }
-      if (requestData.body && requestData.body.data && requestData.body.data.type !== requestData.resourceType) {
-        return handler.rejectRequest(ERROR_CODE.HTTP_BAD_REQUEST);
-      }
-      let sqlStatement = handler.queryBuilder.buildStatement(requestMethod, requestData);
-      return handler.DataHook.database[requestMethod](sqlStatement);
-    });
+    }
+  }
+
+  /**
+   * Controlled Error throw from the node 'error' event.
+   *
+   * @param error object
+   * @return void
+   **/
+  requestError (error) {
+    throw new DataHookError('request.js', 'prepareRequestPromise', error.toString(), ERROR_CODE.HTTP_BAD_REQUEST);
+  }
+
+  /**
+   * Reject request if method is not allowed
+   *
+   * @param method string
+   * @return void
+   **/
+  methodAllowed (method) {
+    if (this.ALLOWED_METHODS.indexOf(method) === -1) {
+      throw new DataHookError('request.js', 'methodAllowed', 'Method not allowed', ERROR_CODE.HTTP_METHOD_NOT_ALLOWED);
+    }
   };
 
-  isMethodAllowed (method) {
-    return (this.ALLOWED_METHODS.indexOf(method) !== -1);
+  /**
+   * Reject request if missing or wrong Content-Type header.
+   *
+   * @param headers object
+   * @return void
+   **/
+  checkContentHeader (headers) {
+    if (!headers.hasOwnProperty('Content-Type')) {
+      throw new DataHookError('request.js', 'checkHeaders', 'Missing Content-Type header', ERROR_CODE.HTTP_BAD_REQUEST);
+    }
+    if (this.ALLOWED_CONTENT_TYPE !== headers['Content-Type']) {
+      throw new DataHookError('request.js', 'checkHeaders', 'Content-Type not allowed', ERROR_CODE.HTTP_NOT_ACCEPTABLE);
+    }
   };
 
-  rejectRequest (responseCode) {
-    // @TODO: ADD ERROR LOGGER
-    return new Promise ((resolve, reject) => {
-      reject(responseCode)
-    });
-  };
+  /**
+   * Resolve request with serialized data.
+   *
+   * @param response object
+   * @param rows object
+   * @param fields object
+   * @return void
+   **/
+  resolveRequest (response, rows, fields) {
+    // Always 200?
+    response.writeHead(200, this.headers);
+    // Needs JSONAPI Serializer here!
+    response.end(rows);
+  }
+
+  /**
+   * Reject request with proper error code and optionally console log the error message.
+   *
+   * @param response object
+   * @param error object
+   * @return void
+   **/
+  rejectRequest (response, error) {
+    // Put bool for logger ON/OFF
+    console.log('rejectRequest: ', error.msg, error.statusCode);
+    let statusCode = (error.statusCode ? error.statusCode : 500);
+    response.writeHead(statusCode, this.headers);
+    response.end();
+  }
 }
 module.exports = RequestHandler;

@@ -4,7 +4,6 @@ const http = require('http');
 const EventEmitter = require('events');
 const FileSystem = require('fs');
 const RequestHandler = require('./request');
-const ResponseHandler = require('./response');
 const SchemaFactory = require('./schema');
 let Database;
 
@@ -20,19 +19,19 @@ class DataHook extends EventEmitter {
     super();
     this.NODE_CONFIG = CONFIG.NODE;
     this.DB_TYPE = CONFIG.DB_TYPE;
-    this.dependencyFileCheck();
+    this.adapterFileCheck();
 
     Database = require('./database/' + this.DB_TYPE.toLowerCase());
     this[this.DB_TYPE + '_CONFIG'] = CONFIG[this.DB_TYPE];
 
     this.database = new Database(this[this.DB_TYPE + '_CONFIG']);
     this.requestHandler = new RequestHandler(this);
-    this.responseHandler = new ResponseHandler(this);
-    this.dataStructure = {};
 
     try {
       this.schema = new SchemaFactory(this);
     } catch (error) {
+      let messages = ['Schema initiation has failed. Please check your config and structure file!'];
+      this.endProcess(messages);
     }
 
     this.server = http.createServer(this.serverRequestListener(this)).listen(this.NODE_CONFIG.PORT, this.NODE_CONFIG.HOSTNAME);
@@ -43,16 +42,17 @@ class DataHook extends EventEmitter {
    *
    * @return void
    **/
-  dependencyFileCheck () {
+  adapterFileCheck () {
     try{
       FileSystem.accessSync('src/database/' + this.DB_TYPE.toLowerCase() + '.js', FileSystem.R_OK);
       FileSystem.accessSync('src/query/' + this.DB_TYPE.toLowerCase() + '.js', FileSystem.R_OK);
       FileSystem.accessSync('src/scanner/' + this.DB_TYPE.toLowerCase() + '.js', FileSystem.R_OK);
     } catch(error) {
-      console.log(error);
-      console.log('DataHook is missing adapter files in database, query, scanner directory or config DB_TYPE has been misspelled.');
-      console.log('Please check adapters and your DataHook config file!');
-      process.exit();
+      let messages =[
+        'DataHook is missing adapter files in database, query, scanner directory or config DB_TYPE has been misspelled.',
+        'Please check adapters and your DataHook config file!'
+      ];
+      this.endProcess(messages);
     }
   }
 
@@ -66,15 +66,23 @@ class DataHook extends EventEmitter {
    **/
   serverRequestListener (DataHook) {
     return (request, response) => {
-      DataHook.requestHandler.run(request).then(
-        (rows) => {
-          DataHook.responseHandler.respondWithSuccess(rows, response);
-        },
-        (error) => {
-          DataHook.responseHandler.respondWithError(error, response);
-        }
-      );
+      DataHook.requestHandler.run(request, response);
+    };
+  }
+
+  /**
+   * Displays given messages as console logs and exits the application
+   *
+   * @param consoleMessages array
+   * @return void
+   **/
+  endProcess (consoleMessages) {
+    let index;
+    messages = (messages ? message : []);
+    for (index in messages) {
+      console.log(messages[index]);
     }
+    process.exit();
   }
 
 }

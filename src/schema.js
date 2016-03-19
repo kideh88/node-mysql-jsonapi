@@ -1,6 +1,6 @@
 'use strict';
 
-const DHUtilities = require('./utilities');
+const DataHookUtilities = require('./utilities');
 const FileSystem = require('fs');
 let Scanner;
 
@@ -17,11 +17,14 @@ class SchemaFactory {
 
     try{
       FileSystem.accessSync(this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON, FileSystem.R_OK);
-      this.DataHook.dataStructure = JSON.parse(FileSystem.readFileSync(this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON, 'utf8'));
-      if(this.DataHook.DB_TYPE !== this.DataHook.dataStructure.DB_TYPE) {
-        console.log('DataHook structure config does not match given DB_TYPE');
-        console.log('Please check your DataHook config or remove the current schema file and restart!');
-        process.exit();
+      this.dataStructure = JSON.parse(FileSystem.readFileSync(this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON, 'utf8'));
+      if(this.DataHook.DB_TYPE !== this.dataStructure.DB_TYPE) {
+        //@TODO: COLLECT MESSAGES IN ONE PLACE AND TRIGGER BY CONSTANT PARAM
+        let messages = [
+          'DataHook structure config does not match given DB_TYPE',
+          'Please check your DataHook config or remove the current schema file and restart!'
+        ];
+        this.DataHook.endProcess(messages);
       }
 
     } catch (error) {
@@ -30,31 +33,34 @@ class SchemaFactory {
       this.scaffoldStructureConfig();
     }
 
-    delete this.DataHook.dataStructure.DB_TYPE;
-    this.addSchemaPrototypes(this.DataHook.dataStructure);
+    // DB_TYPE is only used for initiation, hereafter it would only create more if-conditions
+    delete this.dataStructure.DB_TYPE;
 
+    return this.addSchemaPrototypes(this.dataStructure);
   }
 
   /**
-   * Adds functions to the schema, tables and columns of the dataStructure
+   * Adds functions to the structure, tables and columns of the dataStructure
    *
+   * @param structure object
    * @return void
    **/
-  addSchemaPrototypes (schema) {
+  addSchemaPrototypes (structure) {
     let tableName, columnName;
 
-    for (tableName in schema) {
-      if (schema.hasOwnProperty(tableName)) {
-        Object.setPrototypeOf(schema[tableName], Table.prototype);
-        for (columnName in schema[tableName]) {
-          if (schema[tableName].hasOwnProperty(columnName) && columnName !== 'TABLE_INFO') {
-            Object.setPrototypeOf(schema[tableName][columnName], Column.prototype);
+    for (tableName in structure) {
+      if (structure.hasOwnProperty(tableName)) {
+        Object.setPrototypeOf(structure[tableName], Table.prototype);
+        for (columnName in structure[tableName]) {
+          if (structure[tableName].hasOwnProperty(columnName) && columnName !== 'TABLE_INFO') {
+            Object.setPrototypeOf(structure[tableName][columnName], Column.prototype);
           }
         }
       }
     }
 
-    Object.setPrototypeOf(schema, Schema.prototype);
+    Object.setPrototypeOf(structure, Schema.prototype);
+    return structure;
   }
 
   /**
@@ -93,16 +99,18 @@ class SchemaFactory {
       if (error) {
         throw new Error(error);
       } else {
-        console.log('DataHook structure config saved to ' + outputPath);
-        console.log('Please rename all the aliases in the config and restart node!');
-        process.exit();
+        let messages = [
+          'DataHook structure config saved to ' + outputPath,
+          'Please rename all the aliases in the config and restart node!'
+        ];
+        this.DataHook.endProcess(messages);
       }
     });
   }
-
 }
 
 class Schema {
+
   /**
    * Returns boolean on whether this schema has a table with the given name input.
    *
@@ -119,21 +127,53 @@ class Table {
   /**
    * Returns the SELECT array for this table.
    *
+   * @param fieldset object optional
    * @return array
    **/
-  _getSelectorArray () {
+  _getSelectorArray (fieldset) {
     let tableName = this.TABLE_INFO.NAME;
     let key, selectors = [];
     for (key in this) {
-      if (this.hasOwnProperty(key) && this[key] instanceof Column && !this[key]._isForeignKey() && !this[key]._isRestricted()) {
-        if (this[key]._hasSelectModifier()) {
-          selectors.push(this[key]._getSelectModifier());
-        } else {
-          selectors.push(tableName + '.' + key);
-        }
+      if (!this._columnKeyCheck(key)) {
+        // Continue if this column is invalid or restricted.
+        continue;
+      }
+
+      if (fieldset && fieldset.hasOwnProperty(this.TABLE_INFO.NAME) && !this._columnInFieldset(fieldset, key)) {
+        // Continue if this table has a fieldset defined, but the current column is not part of it.
+        continue;
+      }
+
+      if (this[key]._hasSelectModifier()) {
+        selectors.push(this[key]._getSelectModifier());
+      } else {
+        selectors.push(tableName + '.' + key);
       }
     }
     return selectors;
+  }
+
+  /**
+   * Returns boolean on whether this column key is part of the given fieldset object
+   *
+   * @param fieldset object
+   * @param key string
+   * @return boolean
+   **/
+  _columnInFieldset (fieldset, key) {
+    return (fieldset[this.TABLE_INFO.NAME].indexOf(key) > -1);
+  }
+
+  /**
+   * Returns boolean on whether this column key is properly defiend, an instance of Column class
+   * not a foreign key or restricted
+   *
+   * @param key string
+   * @return boolean
+   **/
+  _columnKeyCheck (key) {
+    let isColumnInstance = (this.hasOwnProperty(key) && this[key] instanceof Column);
+    return (isColumnInstance && !this[key]._isForeignKey() && !this[key]._isRestricted());
   }
 
   /**
@@ -221,7 +261,7 @@ class Column {
    * @return boolean
    **/
   _getSelectModifier () {
-    if (!this.hasSelectModifier()) {
+    if (!this._hasSelectModifier()) {
       return null;
     }
     return this.COLUMN_INFO.selectModifier;
@@ -240,7 +280,7 @@ class Column {
       case 'number':
         return parseInt(input);
       case 'boolean':
-        return DHUtilities.stringToBoolean(input);
+        return DataHookUtilities.stringToBoolean(input);
       case 'float':
         return parseFloat(input).toFixed(2);
       case 'timestamp':
@@ -249,7 +289,6 @@ class Column {
         return input.toString();
     }
   }
-
 }
 
 module.exports = SchemaFactory;
