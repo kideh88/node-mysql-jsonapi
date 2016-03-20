@@ -17,6 +17,26 @@ class Database {
     this.connection.connect();
   }
 
+  /**
+   * Execute the request query, uses either a single call method directly or a transaction. Responsd with data to callback.
+   *
+   * @param requestMethod string
+   * @param requestData object
+   * @param callback function
+   * @return void
+   **/
+  execute (requestMethod, requestData, callback) {
+
+    if(requestData.requests === 1) {
+      let preparedStatement = this.prepare(requestData.queries[0].statement);
+      this[requestMethod](preparedStatement);
+    }
+  }
+
+  prepare (statement, names, values) {
+
+  }
+
   get (statement, successCallback, errorCallback) {
     this.connection.query(statement, function (error, rows, fields) {
       if (error) {

@@ -13,6 +13,7 @@ class Scanner {
   /**
    * Set and remap the given information schema data to a usable mapping object in the returned dataStructure
    *
+   * @TODO: ADD TO-ONE OR TO-MANY FIELD - REQUIRED FOR JSONAPI RETURN LOGIC
    * @param data object
    * @return dataStructure object
    **/

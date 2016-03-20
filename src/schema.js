@@ -119,6 +119,62 @@ class Schema {
   _hasTable (input) {
     return this.hasOwnProperty(input);
   }
+
+  /**
+   * Returns boolean on whether the given requestData object matches the application schema.
+   * Data structure from jsonapi-query-parser:
+   * https://github.com/kideh88/node-jsonapi-query-parser#return-data-information-requestdata
+   *
+   * @param request string
+   * @return boolean
+   **/
+  _validateRequestData (request) {
+    // @TODO: VALIDATE FILTER, SORT, FIELDS QUERIES
+    if (!this._hasTable(request.resourceType)) {
+      return false;
+    }
+    if (request.relationshipType && !this[request.resourceType]._hasRelation(request.relationshipType)) {
+      // INVALID RELATION QUERY
+      return false;
+    }
+    if (request.queryData.include && !this[request.resourceType]._hasIncludeRelations(request.resourceType, request.queryData.include)) {
+      // INVALID RELATIONS IN INCLUDE QUERY
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Returns a boolean on whether the requested include data is actually available.
+   * Supports chained inclusions like comments.author as described in JSONAPI specs.
+   *
+   * @param resourceType string
+   * @param include object
+   * @return boolean
+   **/
+  _hasIncludeRelations (resourceType, include) {
+    let index;
+    for (index in include) {
+      if (include[index].indexOf('.') > -1) {
+        let chainedRelation = includeRelation.split('.');
+        if (!this[resourceType]._hasRelation(chainedRelation[0])) {
+          return false;
+        }
+        let relation = this[resourceType]._getsRelation(chainedRelation[0]);
+        let relatedResourceType = (relation.type === 'DIRECT' ? relation.targetTable : relation.fromTable);
+        if (!this[relatedResourceType]._hasRelation(chainedRelation[1])) {
+          return false;
+        }
+      } else {
+        if (!this[resourceType]._hasRelation(include[index])) {
+          return false
+        }
+      }
+    }
+    return true;
+  }
+
+
 }
 
 class Table {
@@ -194,6 +250,7 @@ class Table {
   _getRelation (input) {
     let relation = {};
     if(!this._hasRelation(input)) {
+      // Add error for nonexisting?
       return relation;
     }
     if(this.TABLE_INFO.RELATIONS.hasOwnProperty(input)) {
@@ -205,6 +262,7 @@ class Table {
     }
     return relation;
   }
+
 }
 
 class Column {

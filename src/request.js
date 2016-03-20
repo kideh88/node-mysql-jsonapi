@@ -29,11 +29,14 @@ class RequestHandler {
    * @return void
    **/
   run (request, response) {
-    let requestMethod;
+    let requestData, requestMethod;
     try {
       requestMethod = request.method.toLowerCase();
       this.methodAllowed(requestMethod);
-      this.setRequestListeners(request, response);
+
+      requestData = this.queryParser.parseRequest(request.url);
+      this.DataHook.schema._validateRequestData(requestData);
+      this.setRequestListeners(request, requestData, response);
     }
     catch (error) {
       this.rejectRequest(response, error);
@@ -48,9 +51,8 @@ class RequestHandler {
    * @return void
    **/
   setRequestListeners (request, response) {
-    let requestData = this.queryParser.parseRequest(request.url);
     let requestMethod = request.method.toLowerCase();
-    // Set empty object string for later JSON.parse.
+    // Set empty object string for JSON.parse.
     let bodyData = '{}';
 
     request.on('error', this.requestError);
@@ -74,21 +76,27 @@ class RequestHandler {
         this.checkContentHeader(request.headers);
       }
       requestData.body = this.setRequestBody(bodyData, requestData.resourceType);
-
-      // @TODO: MOVE THIS TO ITS OWN FUNCTION WITH TRANSACTION CALLS FOR MULTIPLE STATEMENTS
       let databaseRequest = new JsonApiQuery(this.DataHook.schema, requestMethod, requestData);
-      this.DataHook.database[requestMethod](databaseRequest.queries[0], this.querySuccess, this.queryError);
+      this.DataHook.database.execute(requestMethod, databaseRequest, this.queryCallback(response));
     }
   }
 
-  querySuccess (data) {
-    // successCallback wrapper so database doesnt need response/request passed into
-    console.log('querySuccess data', data);
-  }
-
-  queryError (error) {
-    // errorCallback wrapper so database doesnt need response/request passed into
-    console.log('queryError error', error);
+  /**
+   * Returns a callback for the database execution call. Handles both erroneous and successful calls.
+   *
+   * @param response object
+   * @return void
+   **/
+  queryCallback (response) {
+    return (databaseResponse) => {
+      if (databaseResponse.error) {
+        let responseData = {}; // THIS WILL BE SERIALIZER CALL!
+        this.rejectRequest(response, responseData)
+      } else {
+        let responseData = {}; // THIS WILL BE SERIALIZER CALL!
+        this.resolveRequest(response, responseData);
+      }
+    }
   }
 
   /**
@@ -182,15 +190,13 @@ class RequestHandler {
    * @return void
    **/
   rejectRequest (response, error) {
-    let statusCode = (error.hasOwnProperty('statusCode') ? error.statusCode : 500);
+    let statusCode = (error instanceof RequestError ? error.statusCode : 500);
     if (this.DataHook.CONSOLE_LOG_ERRORS) {
       console.log('RequestHandler Error:', error);
-      if (error instanceof RequestError) {
-        console.log('STATUS_CODE: ' + error.statusCode);
-      }
+      console.log('STATUS_CODE: ' + statusCode);
     }
-
-    response.writeHead(statusCode, {'Accept': this.headers.Accept});
+    response.writeHead(statusCode, this.headers);
+    // @TODO: ERROR BY JSONAPI SPEC: http://jsonapi.org/examples/#error-objects
     response.end();
   }
 }
