@@ -19,25 +19,3 @@ module.exports.stringToBoolean = function (input) {
       return Boolean(input);
   }
 };
-
-class DataHookError extends Error {
-  /**
-   * Construct a more detailed error.
-   *
-   * @param fileName string
-   * @param functionName string
-   * @param message string
-   * @param statusCode integer
-   * @return void
-   **/
-  constructor (fileName, functionName, message, statusCode) {
-    super(message);
-    this.fileName = fileName;
-    this.functionName = functionName;
-    this.statusCode = statusCode;
-  }
-}
-
-module.exports.DataHookError = DataHookError;
-
-

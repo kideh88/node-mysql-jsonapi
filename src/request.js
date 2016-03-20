@@ -3,7 +3,6 @@
 let JsonApiQuery;
 const ERROR_CODE = require('http-response-codes');
 const JsonApiQueryParser = require('jsonapi-query-parser');
-const DataHookError = require('./utilities').DataHookError;
 
 class RequestHandler {
 
@@ -93,7 +92,7 @@ class RequestHandler {
   }
 
   /**
-   * Parses the given body data and throws DataHookError if the given resourceType does not match the endpoint.
+   * Parses the given body data and throws RequestError if the given resourceType does not match the endpoint.
    *
    * @param bodyData string
    * @param resourceType string
@@ -102,13 +101,13 @@ class RequestHandler {
   setRequestBody (bodyData, resourceType) {
     let requestBody = JSON.parse(bodyData);
     if (requestBody && requestBody.data && requestBody.data.type !== resourceType) {
-      throw new DataHookError('request.js', 'setRequestBody', 'Wrong resource type', ERROR_CODE.HTTP_BAD_REQUEST);
+      throw new RequestError('Given resource type does not match endpoint.', ERROR_CODE.HTTP_BAD_REQUEST);
     }
     return requestBody;
   }
 
   /**
-   * Data stream callback for node on 'data' event. Throws DataHookError if request body is too big.
+   * Data stream callback for node on 'data' event. Throws RequestError if request body is too big.
    *
    * @param bodyData string
    * @return void
@@ -118,7 +117,7 @@ class RequestHandler {
       bodyData += chunk;
       if(bodyData.length > this.maxRequestBodySize) {
         bodyData = "";
-        throw new DataHookError('request.js', 'prepareRequestPromise', 'Entity too large', ERROR_CODE.HTTP_REQUEST_ENTITY_TOO_LARGE);
+        throw new RequestError('Entity too large.', ERROR_CODE.HTTP_REQUEST_ENTITY_TOO_LARGE);
       }
     }
   }
@@ -130,7 +129,7 @@ class RequestHandler {
    * @return void
    **/
   requestError (error) {
-    throw new DataHookError('request.js', 'prepareRequestPromise', error.toString(), ERROR_CODE.HTTP_BAD_REQUEST);
+    throw new RequestError(error.message, ERROR_CODE.HTTP_BAD_REQUEST);
   }
 
   /**
@@ -141,7 +140,7 @@ class RequestHandler {
    **/
   methodAllowed (method) {
     if (this.ALLOWED_METHODS.indexOf(method) === -1) {
-      throw new DataHookError('request.js', 'methodAllowed', 'Method not allowed', ERROR_CODE.HTTP_METHOD_NOT_ALLOWED);
+      throw new RequestError('Method not allowed.', ERROR_CODE.HTTP_METHOD_NOT_ALLOWED);
     }
   };
 
@@ -153,10 +152,10 @@ class RequestHandler {
    **/
   checkContentHeader (headers) {
     if (!headers.hasOwnProperty('Content-Type')) {
-      throw new DataHookError('request.js', 'checkHeaders', 'Missing Content-Type header', ERROR_CODE.HTTP_BAD_REQUEST);
+      throw new RequestError('Missing Content-Type header.', ERROR_CODE.HTTP_BAD_REQUEST);
     }
     if (this.ALLOWED_CONTENT_TYPE !== headers['Content-Type']) {
-      throw new DataHookError('request.js', 'checkHeaders', 'Content-Type not allowed', ERROR_CODE.HTTP_NOT_ACCEPTABLE);
+      throw new RequestError('Content-Type not allowed.', ERROR_CODE.HTTP_NOT_ACCEPTABLE);
     }
   };
 
@@ -185,13 +184,9 @@ class RequestHandler {
   rejectRequest (response, error) {
     let statusCode = (error.hasOwnProperty('statusCode') ? error.statusCode : 500);
     if (this.DataHook.CONSOLE_LOG_ERRORS) {
-      if (!error instanceof DataHookError) {
-        console.log('RequestHandler.rejectRequest unexpected error:');
-        console.log(error);
-      } else {
-        console.log('DataHookError in ' + error.fileName + '.' + error.functionName);
-        console.log('CODE: ' + error.statusCode);
-        console.log('MESSAGE: ' + error.msg);
+      console.log('RequestHandler Error:', error);
+      if (error instanceof RequestError) {
+        console.log('STATUS_CODE: ' + error.statusCode);
       }
     }
 
@@ -199,4 +194,19 @@ class RequestHandler {
     response.end();
   }
 }
+
+class RequestError extends Error {
+  /**
+   * Construct a RequestError with statusCode for a proper response
+   *
+   * @param message string
+   * @param statusCode integer
+   * @return void
+   **/
+  constructor (message, statusCode) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
 module.exports = RequestHandler;
