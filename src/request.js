@@ -31,14 +31,12 @@ class RequestHandler {
    **/
   run (request, response) {
     let requestMethod;
-
     try {
       requestMethod = request.method.toLowerCase();
       this.methodAllowed(requestMethod);
       this.setRequestListeners(request, response);
     }
     catch (error) {
-      console.log('RequestHandler.run ', error);
       this.rejectRequest(response, error);
     }
   }
@@ -185,10 +183,19 @@ class RequestHandler {
    * @return void
    **/
   rejectRequest (response, error) {
-    // Put bool for logger ON/OFF
-    console.log('rejectRequest: ', error.msg, error.statusCode);
-    let statusCode = (error.statusCode ? error.statusCode : 500);
-    response.writeHead(statusCode, this.headers);
+    let statusCode = (error.hasOwnProperty('statusCode') ? error.statusCode : 500);
+    if (this.DataHook.CONSOLE_LOG_ERRORS) {
+      if (!error instanceof DataHookError) {
+        console.log('RequestHandler.rejectRequest unexpected error:');
+        console.log(error);
+      } else {
+        console.log('DataHookError in ' + error.fileName + '.' + error.functionName);
+        console.log('CODE: ' + error.statusCode);
+        console.log('MESSAGE: ' + error.msg);
+      }
+    }
+
+    response.writeHead(statusCode, {'Accept': this.headers.Accept});
     response.end();
   }
 }

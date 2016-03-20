@@ -19,6 +19,8 @@ class DataHook extends EventEmitter {
     super();
     this.NODE_CONFIG = CONFIG.NODE;
     this.DB_TYPE = CONFIG.DB_TYPE;
+    this.CONSOLE_LOG_ERRORS = CONFIG.CONSOLE_LOG_ERRORS;
+    this.LOG_FILE = CONFIG.LOG_FILE;
     this.adapterFileCheck();
 
     Database = require('./database/' + this.DB_TYPE.toLowerCase());
@@ -73,15 +75,17 @@ class DataHook extends EventEmitter {
   /**
    * Displays given messages as console logs and exits the application
    *
-   * @param consoleMessages array
+   * @param messages array
    * @return void
    **/
-  endProcess (consoleMessages) {
-    let index;
-    messages = (messages ? message : []);
-    for (index in messages) {
-      console.log(messages[index]);
+  endProcess (messages) {
+    if (messages && this.DATA_HOOK.LOG_ERRORS) {
+      let index;
+      for (index in messages) {
+        console.log(messages[index]);
+      }
     }
+
     process.exit();
   }
 

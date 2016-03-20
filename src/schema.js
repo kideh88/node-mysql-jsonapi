@@ -21,15 +21,14 @@ class SchemaFactory {
       if(this.DataHook.DB_TYPE !== this.dataStructure.DB_TYPE) {
         //@TODO: COLLECT MESSAGES IN ONE PLACE AND TRIGGER BY CONSTANT PARAM
         let messages = [
-          'DataHook structure config does not match given DB_TYPE',
+          'SchemaFactory: DataHook structure config does not match given DB_TYPE',
           'Please check your DataHook config or remove the current schema file and restart!'
         ];
         this.DataHook.endProcess(messages);
       }
 
     } catch (error) {
-      console.log('SchemaFactory constructor error', error);
-      console.log('No existing valid data structure file found. Now scaffolding to: ' + this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON);
+      console.log('SchemaFactory: No existing valid data structure file found. Now scaffolding to: ' + this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON);
       this.scaffoldStructureConfig();
     }
 
@@ -100,8 +99,8 @@ class SchemaFactory {
         throw new Error(error);
       } else {
         let messages = [
-          'DataHook structure config saved to ' + outputPath,
-          'Please rename all the aliases in the config and restart node!'
+          'SchemaFactory: DataHook structure config saved to ' + outputPath,
+          'Please rename all the aliases in the config and restart the application!'
         ];
         this.DataHook.endProcess(messages);
       }
