@@ -13,7 +13,6 @@ class Scanner {
   /**
    * Set and remap the given information schema data to a usable mapping object in the returned dataStructure
    *
-   * @TODO: ADD TO-ONE OR TO-MANY FIELD - REQUIRED FOR JSONAPI RETURN LOGIC
    * @param data object
    * @return dataStructure object
    **/
@@ -65,7 +64,8 @@ class Scanner {
           'column': row.COLUMN_NAME,
           'name': row.CONSTRAINT_NAME,
           'targetTable': row.REFERENCED_TABLE_NAME,
-          'targetColumn': row.REFERENCED_COLUMN_NAME
+          'targetColumn': row.REFERENCED_COLUMN_NAME,
+          'relates': 'TO_ONE|TO_MANY'
         };
 
         let referenceAliasReplace = 'ALIASFOR' + row.TABLE_NAME + row.COLUMN_NAME;
@@ -73,7 +73,8 @@ class Scanner {
           'column': row.REFERENCED_COLUMN_NAME,
           'name': row.CONSTRAINT_NAME,
           'fromTable': row.TABLE_NAME,
-          'fromColumn': row.COLUMN_NAME
+          'fromColumn': row.COLUMN_NAME,
+          'relates': 'TO_ONE|TO_MANY'
         };
       }
     }

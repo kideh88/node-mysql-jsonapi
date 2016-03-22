@@ -19,7 +19,7 @@ class SchemaFactory {
       FileSystem.accessSync(this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON, FileSystem.R_OK);
       this.dataStructure = JSON.parse(FileSystem.readFileSync(this.DataHook.NODE_CONFIG.DATA_STRUCTURE_JSON, 'utf8'));
       if(this.DataHook.DB_TYPE !== this.dataStructure.DB_TYPE) {
-        //@TODO: COLLECT MESSAGES IN ONE PLACE AND TRIGGER BY CONSTANT PARAM
+        //@TODO: COLLECT MESSAGES IN ONE PLACE AND TRIGGER BY CONSTANT PARAM?
         let messages = [
           'SchemaFactory: DataHook structure config does not match given DB_TYPE',
           'Please check your DataHook config or remove the current schema file and restart!'
@@ -69,19 +69,21 @@ class SchemaFactory {
    **/
   scaffoldStructureConfig () {
     try {
-      this.DataHook.database.scanDatabaseStructure().then(
-        (schemaData) => {
-          this.DataHook.dataStructure = Scanner.generateDataStructure(schemaData);
-          this.writeConfigToFile();
-        },
-        (error) => {
-          throw new Error(error);
-        }
-      );
+      this.DataHook.database.scanDatabaseStructure(this.structureCallback);
     } catch (error) {
       console.log('SchemaFactory.scaffoldStructureConfig Error: ', error);
       process.exit();
     }
+  }
+
+  /**
+   * Callback for the information schema call.
+   *
+   * @return void
+   **/
+  structureCallback (response) {
+    this.DataHook.dataStructure = Scanner.generateDataStructure(response);
+    this.writeConfigToFile();
   }
 
   /**

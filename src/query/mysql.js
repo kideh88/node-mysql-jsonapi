@@ -1,9 +1,12 @@
 'use strict';
 
+let sqlStringFormat = require('mysql').format;
+
 class JsonApiQuery {
 
-  constructor (schema, requestMethod, requestData) {
-    this.schema = schema;
+  constructor (DataHook, requestMethod, requestData) {
+    this.schema = DataHook.schema;
+    this.format = DataHook.database.mysql.format;
     this.querySelect = [];
 
     this.requestMethod = requestMethod;

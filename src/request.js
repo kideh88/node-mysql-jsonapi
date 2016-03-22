@@ -76,8 +76,8 @@ class RequestHandler {
         this.checkContentHeader(request.headers);
       }
       requestData.body = this.setRequestBody(bodyData, requestData.resourceType);
-      let databaseRequest = new JsonApiQuery(this.DataHook.schema, requestMethod, requestData);
-      this.DataHook.database.execute(requestMethod, databaseRequest, this.queryCallback(response));
+      let databaseRequest = new JsonApiQuery(this.DataHook, requestMethod, requestData);
+      this.DataHook.database.execute(databaseRequest, this.queryCallback(response));
     }
   }
 

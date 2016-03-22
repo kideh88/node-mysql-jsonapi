@@ -18,146 +18,129 @@ class Database {
   }
 
   /**
-   * Execute the request query, uses either a single call method directly or a transaction. Responsd with data to callback.
+   * Execute the request query, uses either a single call method directly or a transaction. Respond with data to callback.
    *
-   * @param requestMethod string
    * @param requestData object
    * @param callback function
    * @return void
    **/
-  execute (requestMethod, requestData, callback) {
-
-    if(requestData.requests === 1) {
-      let preparedStatement = this.prepare(requestData.queries[0].statement);
-      this[requestMethod](preparedStatement);
+  execute (requestData, callback) {
+    if(requestData.queries.length === 1) {
+      this.singleQuery(requestData, callback);
+    } else {
+      this.startTransaction(requestData, callback);
     }
   }
 
-  prepare (statement, names, values) {
-
+  /**
+   * Execute a single query and send any data or error to callback function.
+   *
+   * @param requestData object
+   * @param callback function
+   * @return void
+   **/
+  singleQuery (requestData, callback) {
+    this.connection.query(requestData.queries[0].statement, function (error, rows, fields) {
+      requestData.error = (error ? error : null);
+      requestData.queries[0] = {
+        rows: (rows ? rows : null),
+        fields: (fields ? fields : null)
+      };
+      callback(requestData);
+    });
   }
 
-  get (statement, successCallback, errorCallback) {
-    this.connection.query(statement, function (error, rows, fields) {
+  /**
+   * Start a transaction and set off the recursive query functions.
+   *
+   * @param requestData object
+   * @param callback function
+   * @return void
+   **/
+  startTransaction (requestData, callback) {
+    let lastQueryIndex = (requestData.queries.length - 1);
+    this.connection.beginTransaction((error) => {
       if (error) {
-        // DO THROW DATAHOOKERROR?
-        errorCallback(error);
-      } else {
-        successCallback({rows: rows, fields: fields});
+        requestData.error = error;
+        callback(requestData);
+        return;
       }
+      this.nextTransaction(lastQueryIndex, 0, requestData, callback);
     });
   }
 
-  patch (statement) {
-    return new Promise((resolve, reject) => {
-      this.connection.query(statement, function (error, rows, fields) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(rows, fields);
-        }
-      });
-    });
-  }
-
-  post (statement) {
-    return new Promise((resolve, reject) => {
-      this.connection.query(statement, function (error, rows, fields) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(rows, fields);
-        }
-      });
-    });
-  }
-
-  delete (statement) {
-    return new Promise((resolve, reject) => {
-      this.connection.query(statement, function (error, rows, fields) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(rows, fields);
-        }
-      });
-    });
-  }
-
-  transaction (statements) {
-    return new Promise((resolve, reject) => {
-      let transactionPromises = [];
-      let transactionResults;
-      let index;
-      for (index in statements) {
-        transactionPromises.push(this.getTransactionPromise(connection, statements[index]));
-      }
-
-      this.connection.beginTransaction((error) => {
-        if (error) {
-          reject(error);
-        }
-
-        Promise.all(transactionPromises).then(
-          function(data) {
-            console.log('transaction PROMISE ALL SUCCESS', data);
-            transactionResults = data;
-          },
-          function(error) {
-            console.log('transaction PROMISE ALL fail', error);
-            connection.rollback(function() {
-              reject(error);
-            });
-          }
-        );
-
-        this.connection.commit(function(error) {
-          if (error) {
-            connection.rollback(function() {
-              reject(error);
-            });
-          } else {
-            console.log('commit success!');
-            resolve(transactionResults)
-          }
+  /**
+   * Execute each query recursively. Adds the data to the requestData object or triggers a rollback on any errors.
+   *
+   * @param lastIndex integer
+   * @param queryIndex integer
+   * @param requestData object
+   * @param callback function
+   * @return void
+   **/
+  nextTransaction (lastIndex, queryIndex, requestData, callback) {
+    this.connection.query(requestData.queries[queryIndex], (error, result) => {
+      if (error) {
+        return connection.rollback(() => {
+          requestData.error = error;
+          callback(requestData);
         });
-      });
+      }
+
+      requestData.queries[queryIndex].result = result;
+
+      if (queryIndex < lastIndex) {
+        let nextIndex = queryIndex + 1;
+        this.nextTransaction(lastIndex, nextIndex, requestData, callback);
+      } else {
+        this.endTransaction(requestData, callback);
+      }
     });
   }
 
-  getTransactionPromise (connection, statement) {
-    return new Promise((resolve, reject) => {
-      connection.query(statement, function(error, result) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result);
-        }
-      });
+  /**
+   * Ends the transaction by commit all the queries. Returns the response via requestData to the callback or triggers a rollback on any errors.
+   *
+   * @param requestData object
+   * @param callback function
+   * @return void
+   **/
+  endTransaction (requestData, callback) {
+    this.connection.commit((error) => {
+      if (error) {
+        return connection.rollback(() => {
+          requestData.error = error;
+          callback(requestData);
+        });
+      }
+      callback(requestData);
     });
   }
 
-  scanDatabaseStructure () {
+  /**
+   * Get the information schema from the database. Used to create the schema file.
+   *
+   * @return void
+   **/
+  scanDatabaseStructure (callback) {
     let structureStatement = "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ?;";
     let keyStatement = "SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ?;";
     structureStatement = this.mysql.format(structureStatement, this.CONFIG.DATABASE);
     keyStatement = this.mysql.format(keyStatement, this.CONFIG.DATABASE);
 
-    return new Promise ((resolve, reject) => {
-      this.connection.query(structureStatement, (error, rows, fields) => {
-        let data = {};
-        if (error) {
-          reject (error);
-        }
-        data.structure = rows;
+    this.connection.query(structureStatement, (error, rows, fields) => {
+      let responseData = {};
+      if (error) {
+        throw new Error(error);
+      }
+      responseData.structure = rows;
 
-        this.connection.query(keyStatement, (error, rows, fields) => {
-          if (error) {
-            reject (error);
-          }
-          data.keys = rows;
-          resolve(data);
-        });
+      this.connection.query(keyStatement, (error, rows, fields) => {
+        if (error) {
+          throw new Error(error);
+        }
+        responseData.keys = rows;
+        callback(responseData);
       });
     });
   }
