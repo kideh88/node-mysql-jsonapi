@@ -1,19 +1,20 @@
 'use strict';
 
-let JsonApiQuery;
+let DatabaseQuery;
 const ERROR_CODE = require('http-response-codes');
 const JsonApiQueryParser = require('jsonapi-query-parser');
 
 class RequestHandler {
 
-  constructor (DataHook) {
-    this.DataHook = DataHook;
-    JsonApiQuery = require('./query/' + DataHook.DB_TYPE.toLowerCase());
+  constructor (dataHook) {
+    this.dataHook = dataHook;
+    // @TODO: RENAME DATABASEQUERY/ JSONAPIQUERY
+    DatabaseQuery = require('./query/' + dataHook.DB_TYPE.toLowerCase());
 
     this.queryParser = new JsonApiQueryParser();
-    this.maxRequestBodySize = (this.DataHook.NODE_CONFIG.MAX_REQUEST_SIZE ? this.DataHook.NODE_CONFIG.MAX_REQUEST_SIZE : 1e6);
+    this.maxRequestBodySize = (this.dataHook.NODE_CONFIG.MAX_REQUEST_SIZE ? this.dataHook.NODE_CONFIG.MAX_REQUEST_SIZE : 1e6);
 
-    this.ALLOWED_METHODS = this.DataHook.NODE_CONFIG.ALLOWED_METHODS;
+    this.ALLOWED_METHODS = this.dataHook.NODE_CONFIG.ALLOWED_METHODS;
     this.ALLOWED_CONTENT_TYPE = 'application/vnd.api+json';
     this.headers = {
       'Content-Type': 'application/vnd.api+json',
@@ -35,7 +36,7 @@ class RequestHandler {
       this.methodAllowed(requestMethod);
 
       requestData = this.queryParser.parseRequest(request.url);
-      this.DataHook.schema._validateRequestData(requestData);
+      this.dataHook.schema._verifyRequestData(requestData);
       this.setRequestListeners(request, requestData, response);
     }
     catch (error) {
@@ -75,9 +76,9 @@ class RequestHandler {
       if (bodyData !== '{}') {
         this.checkContentHeader(request.headers);
       }
-      requestData.body = this.setRequestBody(bodyData, requestData.resourceType);
-      let databaseRequest = new JsonApiQuery(this.DataHook, requestMethod, requestData);
-      this.DataHook.database.execute(databaseRequest, this.queryCallback(response));
+      requestData.body = this.getRequestBody(bodyData, requestMethod, requestData);
+      let databaseRequest = new JsonApiQuery(this.dataHook, requestMethod, requestData);
+      this.dataHook.database.execute(databaseRequest, this.queryCallback(response));
     }
   }
 
@@ -103,15 +104,88 @@ class RequestHandler {
    * Parses the given body data and throws RequestError if the given resourceType does not match the endpoint.
    *
    * @param bodyData string
-   * @param resourceType string
+   * @param requestData object
+   * @param requestMethod string
    * @return void
    **/
-  setRequestBody (bodyData, resourceType) {
-    let requestBody = JSON.parse(bodyData);
-    if (requestBody && requestBody.data && requestBody.data.type !== resourceType) {
-      throw new RequestError('Given resource type does not match endpoint.', ERROR_CODE.HTTP_BAD_REQUEST);
-    }
+  getRequestBody (bodyData, requestMethod, requestData) {
+    this.validateRequestBody(requestBody, requestMethod, requestData);
+    let requestBody = JSON.parse(bodyData); // if {} = empty
+
+    this.dataHook.schema._validateRequestBody();
+
+
     return requestBody;
+  }
+
+  validateDataMember (body, requestData, isRelationship) {
+    this.verifyObjectProperty(body, ['data']);
+    let data = (bodyObject.data instanceof Array ? body.data : [body.data]);
+
+    let index;
+    for (index in data) {
+      this.verifyObjectProperty(data[index], ['type', 'id']);
+      let resourceType = (isRelationship ? this.dataHook.schema[requestData.resourceType]._getRelationshipResourceType(data[index]) : requestData.resourceType);
+      this.compareResourceType(data[index], resourceType);
+
+      if (data[index].hasOwnProperty('attributes')) {
+        this.dataHook.schema[resourceType]._verifyAttributes(data[index].attributes);
+      }
+
+      if (data[index].hasOwnProperty('relationships')) {
+        let alias;
+        for (alias in data[index].relationships) {
+          this.dataHook.schema[resourceType]._verifyRelationship(alias);
+          this.validateDataMember(data[index].relationships[alias], requestData, true);
+        }
+      }
+    }
+
+  }
+
+  validateRequestBody (body, requestMethod, requestData) {
+    if (requestMethod === 'get') {
+      return true;
+    }
+    if(requestData.relationships) {
+      this.validateDataMember(body, requestData, false);
+
+
+    } else {
+      if (requestMethod === 'patch' || requestMethod === 'post') {
+        this.verifyDataMember(body);
+        if (body.data instanceof Object === false) {
+          throw new RequestError('Request `data` Member has to be an instance of `Object`.', ERROR_CODE.HTTP_UNPROCESSABLE_ENTITY);
+        }
+      }
+    }
+
+
+
+  }
+
+  validateRelationshipsData (data) {
+
+  }
+
+  verifyObjectProperty (object, attributes, member) {
+    let memberLevel = (member ? member : 'Top level');
+    let index;
+    for (index in attributes) {
+      if (!object.hasOwnProperty(attributes[index])) {
+        throw new RequestError('Missing attribute `' + attributes[index] + '` in request body member: ' + memberLevel, ERROR_CODE.HTTP_UNPROCESSABLE_ENTITY);
+      }
+    }
+
+  }
+
+  compareResourceType (data, resourceType) {
+    if (!this.dataHook.schema._hasTable(resourceType)) {
+      throw new RequestError('Unknown resource type.', ERROR_CODE.HTTP_BAD_REQUEST);
+    }
+    if (data.type !== resourceType) {
+      throw new RequestError('Request resource type does not match endpoint type.', ERROR_CODE.HTTP_BAD_REQUEST);
+    }
   }
 
   /**
@@ -191,7 +265,7 @@ class RequestHandler {
    **/
   rejectRequest (response, error) {
     let statusCode = (error instanceof RequestError ? error.statusCode : 500);
-    if (this.DataHook.CONSOLE_LOG_ERRORS) {
+    if (this.dataHook.CONSOLE_LOG_ERRORS) {
       console.log('RequestHandler Error:', error);
       console.log('STATUS_CODE: ' + statusCode);
     }

@@ -10,6 +10,40 @@ let dataTypeMapping = {
 
 class Scanner {
 
+  constructor (dataHook) {
+    this.mysql = dataHook.database.mysql;
+    this.connection = dataHook.database.connection;
+    this.CONFIG = dataHook.CONFIG;
+  }
+
+  /**
+   * [Get the information schema from the database. Used to create the schema file.]
+   *
+   * @return void
+   **/
+  scanDatabaseStructure (callback) {
+    let structureStatement = "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ?;";
+    let keyStatement = "SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ?;";
+    structureStatement = this.mysql.format(structureStatement, this.CONFIG.DATABASE);
+    keyStatement = this.mysql.format(keyStatement, this.CONFIG.DATABASE);
+
+    this.connection.query(structureStatement, (error, rows, fields) => {
+      let responseData = {};
+      if (error) {
+        throw new Error(error);
+      }
+      responseData.structure = rows;
+
+      this.connection.query(keyStatement, (error, rows, fields) => {
+        if (error) {
+          throw new Error(error);
+        }
+        responseData.keys = rows;
+        callback(responseData);
+      });
+    });
+  }
+
   /**
    * Set and remap the given information schema data to a usable mapping object in the returned dataStructure
    *
@@ -25,8 +59,8 @@ class Scanner {
       dataStructure[row.TABLE_NAME] = (dataStructure[row.TABLE_NAME] ? dataStructure[row.TABLE_NAME] : {});
       dataStructure[row.TABLE_NAME]['TABLE_INFO'] = {
         'NAME': row.TABLE_NAME,
-        'INVERSE_RELATIONS': {},
-        'RELATIONS': {}
+        'INVERSE_RELATIONSHIPS': {},
+        'RELATIONSHIPS': {}
       };
       dataStructure[row.TABLE_NAME][row.COLUMN_NAME] = {
         COLUMN_INFO: {
@@ -60,7 +94,7 @@ class Scanner {
         dataStructure[row.TABLE_NAME][row.COLUMN_NAME].COLUMN_INFO.isForeignKey = true;
 
         let aliasReplace = 'ALIASFOR' + row.REFERENCED_TABLE_NAME + row.REFERENCED_COLUMN_NAME;
-        dataStructure[row.TABLE_NAME]['TABLE_INFO']['RELATIONS'][aliasReplace] = {
+        dataStructure[row.TABLE_NAME]['TABLE_INFO']['RELATIONSHIPS'][aliasReplace] = {
           'column': row.COLUMN_NAME,
           'name': row.CONSTRAINT_NAME,
           'targetTable': row.REFERENCED_TABLE_NAME,
@@ -69,7 +103,7 @@ class Scanner {
         };
 
         let referenceAliasReplace = 'ALIASFOR' + row.TABLE_NAME + row.COLUMN_NAME;
-        dataStructure[row.REFERENCED_TABLE_NAME]['TABLE_INFO']['INVERSE_RELATIONS'][referenceAliasReplace] = {
+        dataStructure[row.REFERENCED_TABLE_NAME]['TABLE_INFO']['INVERSE_RELATIONSHIPS'][referenceAliasReplace] = {
           'column': row.REFERENCED_COLUMN_NAME,
           'name': row.CONSTRAINT_NAME,
           'fromTable': row.TABLE_NAME,

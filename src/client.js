@@ -4,15 +4,15 @@ const http = require('http');
 const EventEmitter = require('events');
 const FileSystem = require('fs');
 const RequestHandler = require('./request');
-const SchemaFactory = require('./schema');
+const SchemaFactory = require('./schema/schema');
 let Database;
 
 class DataHook extends EventEmitter {
 
   /**
-   * DataHook constructor extending super EventEmitter, first time running will scaffold a structure config
+   * [DataHook constructor extending EventEmitter and creating server. First time running will scaffold a database structure config file.]
    *
-   * @param CONFIG object
+   * @param {object} CONFIG [Content of DataHook configuration file.]
    * @return void
    **/
   constructor(CONFIG) {
@@ -24,14 +24,15 @@ class DataHook extends EventEmitter {
     this.adapterFileCheck();
 
     Database = require('./database/' + this.DB_TYPE.toLowerCase());
-    this[this.DB_TYPE + '_CONFIG'] = CONFIG[this.DB_TYPE];
+    this.CONNECTION_CONFIG = CONFIG.CONNECTION;
 
-    this.database = new Database(this[this.DB_TYPE + '_CONFIG']);
+    this.database = new Database(this.CONNECTION_CONFIG);
     this.requestHandler = new RequestHandler(this);
 
     try {
       this.schema = new SchemaFactory(this);
     } catch (error) {
+      // @TODO HANDLE ERROR CORRECTLY
       let messages = ['Schema initiation has failed. Please check your config and structure file!'];
       this.endProcess(messages);
     }
@@ -40,7 +41,7 @@ class DataHook extends EventEmitter {
   }
 
   /**
-   * Checks the required files for the given DB_TYPE. Exits the application if any are missing.
+   * [Checks the required files for the given DB_TYPE. Exits the application if any are missing.]
    *
    * @return void
    **/
@@ -59,23 +60,23 @@ class DataHook extends EventEmitter {
   }
 
   /**
-   * Returns a request listener for the node createServer function
+   * [Returns a request listener for the node createServer function
    * Get passed 'this' scope into DataHook since 'this' points at http server.
-   * Needs to pass the request and response objects back to callback
+   * Needs to pass the request and response objects back to callback.]
    *
-   * @param DataHook object
-   * @return object function
+   * @param {object} dataHook [Passes itself as parameter to enable access to its properties inside RequestHandler.]
+   * @return {object} callback [Request listener callback for node requests.]
    **/
-  serverRequestListener (DataHook) {
+  serverRequestListener (dataHook) {
     return (request, response) => {
-      DataHook.requestHandler.run(request, response);
+      dataHook.requestHandler.run(request, response);
     };
   }
 
   /**
-   * Displays given messages as console logs and exits the application
-   *
-   * @param messages array
+   * [Displays given messages as console logs and exits the application.]
+   *.
+   * @param {[string]} messages [An array of error messages.]
    * @return void
    **/
   endProcess (messages) {
