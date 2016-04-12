@@ -8,7 +8,7 @@ let dataTypeMapping = {
   "string": ["TEXT", "MEDIUMTEXT", "CHAR", "VARCHAR", "TINYTEXT"]
 };
 
-class Scanner {
+class StructureScanner {
 
   constructor (dataHook) {
     this.mysql = dataHook.database.mysql;
@@ -19,7 +19,9 @@ class Scanner {
   /**
    * [Get the information schema from the database. Used to create the schema file.]
    *
+   * @param {object} callback [Callback to pass the response data into.]
    * @return void
+   * @throws Error
    **/
   scanDatabaseStructure (callback) {
     let structureStatement = "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ?;";
@@ -45,10 +47,11 @@ class Scanner {
   }
 
   /**
-   * Set and remap the given information schema data to a usable mapping object in the returned dataStructure
+   * [Set and remap the given information schema data to a usable mapping object in the returned dataStructure.]
    *
-   * @param data object
-   * @return dataStructure object
+   * @param {object} data [MySQL information schema data.]
+   * @return {object} dataStructure [Database structure for scaffolding the structure json file.]
+   * @throws Error
    **/
   static generateDataStructure (data) {
     let dataStructure = {};
@@ -78,7 +81,7 @@ class Scanner {
     for(index in data.keys) {
       let row = data.keys[index];
       if(!dataStructure[row.TABLE_NAME] || !dataStructure[row.TABLE_NAME][row.COLUMN_NAME]){
-        throw new Error('Structure scan: Table or column not found. Table: '
+        throw new Error('StructureScanner: Table or column not found. Table: '
           + row.TABLE_NAME + ' Column: ' + row.COLUMN_NAME);
       }
 
@@ -87,7 +90,7 @@ class Scanner {
       } else {
 
         if(!dataStructure[row.REFERENCED_TABLE_NAME] || !dataStructure[row.REFERENCED_TABLE_NAME][row.REFERENCED_COLUMN_NAME]){
-          throw new Error('Structure scan: Referenced table or column not found. Table: '
+          throw new Error('StructureScanner: Referenced table or column not found. Table: '
             + row.REFERENCED_TABLE_NAME + ' Column: ' + row.REFERENCED_COLUMN_NAME);
         }
 
@@ -117,10 +120,11 @@ class Scanner {
   }
 
   /**
-   * Get the simplified type from a MySQL data type ("INT" = "number", "MEDIUMTEXT" = "string"..)
+   * [Get the simplified type from a MySQL data type ("INT" = "number", "MEDIUMTEXT" = "string"..)]
    *
-   * @param type string
-   * @return simple_type string
+   * @param {string} type [MySql type.]
+   * @return {string} simpleType [Simplified types for a range of MySQL data types.]
+   * @throws Error
    **/
   static getSimplifiedType (type) {
     let simpleType;
@@ -130,9 +134,9 @@ class Scanner {
         return simpleType;
       }
     }
-    throw new Error('Scanner getSimplifiedType failed with given type: ' + type);
+    throw new Error('StructureScanner: getSimplifiedType failed with given type: ' + type);
   }
 
 }
 
-module.exports = Scanner;
+module.exports = StructureScanner;

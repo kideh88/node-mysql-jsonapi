@@ -2,7 +2,7 @@
 
 const DataHookUtilities = require('./../utilities');
 const FileSystem = require('fs');
-const Scanner = require('./scanner/mysql');
+const StructureScanner = require('./structurescanner');
 
 class SchemaFactory {
 
@@ -43,7 +43,7 @@ class SchemaFactory {
    * [Adds functions to the structure, tables and columns of the dataStructure.]
    *
    * @param {object} structure [Content of the data.structure.json file.]
-   * @return {object} [Prototyped data structure.]
+   * @return {object} structure [Prototyped data structure.]
    **/
   getSchemaWithPrototypes (structure) {
     let tableName, columnName;
@@ -131,6 +131,7 @@ class Schema {
    *
    * @param {string} requestData [requestData from JsonApiQueryParser.]
    * @return {boolean}
+   * @throws SchemaError
    **/
   _validateRequestData (requestData) {
     // @TODO: VALIDATE FILTER, SORT, FIELDS QUERIES
@@ -181,10 +182,10 @@ class Schema {
 class Table {
 
   /**
-   * [Returns the SELECT array for this table.]
+   * [Returns the select field names array for this table.]
    *
-   * @param {object} fieldset optional [The fieldset object from the JsonApiQueryParser requestData.]
-   * @return [string]
+   * @param {object} fieldset optional [The fieldset object from the jsonapi query.]
+   * @return {[string]} columns [All available 'table.column' names for this table.]
    **/
   _getSelectorArray (fieldset) {
     let tableName = this.TABLE_INFO.NAME;
@@ -209,6 +210,11 @@ class Table {
     return selectors;
   }
 
+  /**
+   * [Returns the column names array for this table.]
+   *
+   * @return {[string]} columns [All available column names for this table.]
+   **/
   _getColumnNames () {
     let columns = [];
     let property;
@@ -221,22 +227,22 @@ class Table {
   }
 
   /**
-   * Returns boolean on whether this column key is part of the given fieldset object
+   * [Returns boolean on whether this column key is part of the given fieldset object.]
    *
-   * @param fieldset object
-   * @param key string
-   * @return boolean
+   * @param {object} fieldset [The fieldset from the jsonapi query.]
+   * @param {string} key [Column name to check.]
+   * @return {boolean}
    **/
   _columnInFieldset (fieldset, key) {
     return (fieldset[this.TABLE_INFO.NAME].indexOf(key) > -1);
   }
 
   /**
-   * Returns boolean on whether this column key is properly defined, an instance of Column class
-   * not a foreign key or restricted
+   * [Returns boolean on whether this column key is properly defined, an instance of Column class
+   * not a foreign key or restricted.]
    *
-   * @param key string
-   * @return boolean
+   * @param {string} key [Column to check.]
+   * @return {boolean}
    **/
   _columnKeyCheck (key) {
     let isColumnInstance = (this.hasOwnProperty(key) && this[key] instanceof Column);
@@ -244,20 +250,20 @@ class Table {
   }
 
   /**
-   * Returns boolean on whether this column has a relationship to the given alias input.
+   * [Returns boolean on whether this column has a relationship to the given alias input.]
    *
-   * @param alias string
-   * @return boolean
+   * @param {string} alias [Relationship alias to check.]
+   * @return {boolean}
    **/
   _hasRelationship (alias) {
     return (this.TABLE_INFO.RELATIONSHIPS.hasOwnProperty(alias) || this.TABLE_INFO.INVERSE_RELATIONSHIPS.hasOwnProperty(alias));
   }
 
   /**
-   * Returns a relationship object for this column.
+   * [Returns a relationship object for this column.]
    *
-   * @param alias string
-   * @return object
+   * @param {string} alias [Relationship alias to check.]
+   * @return {object} relationship [Relationship data.]
    **/
   _getRelationship (alias) {
     let relationship = {};
@@ -276,10 +282,10 @@ class Table {
   }
 
   /**
-   * Returns the resource type of a relationship object by alias parameter.
+   * [Returns the resource type of a relationship object by alias parameter.]
    *
-   * @param alias string
-   * @return string
+   * @param {string} alias [Relationship alias.]
+   * @return {string} [ResourceType of the relationship.]
    **/
   _getRelationshipResourceType (alias) {
     let relationship = this._getRelationship(alias);
@@ -291,10 +297,11 @@ class Table {
   }
 
   /**
-   * Validates the given attributes and reports any missing attributes that are not foreign keys or p
+   * [Validates the given attributes and reports any missing attributes that are not foreign keys or primary keys.]
    *
-   * @param attributes object
-   * @return string
+   * @param {object} attributes [Attributes to check.]
+   * @return void
+   * @throws SchemaError
    **/
   _validateAttributes (attributes) {
     let attributeKeys = Object.keys(attributes);
@@ -314,14 +321,16 @@ class Table {
       }
 
     }
+    return true;
     // @TODO; FINISH UP THE VALIDATOR
   }
 
   /**
-   * Validates the given relationship alias including its
+   * [Validates the given relationship alias.]
    *
-   * @param alias string
-   * @return string
+   * @param {string} alias [Relationship to check.]
+   * @return void
+   * @throws SchemaError
    **/
   _validateRelationship (alias) {
     if (!this._hasRelationship(alias)) {
@@ -334,54 +343,54 @@ class Table {
 class Column {
 
   /**
-   * Returns boolean on whether this column is restricted.
+   * [Returns boolean on whether this column is restricted.]
    *
-   * @return boolean
+   * @return {boolean}
    **/
   _isRestricted () {
     return this.COLUMN_INFO.isRestricted;
   }
 
   /**
-   * Returns boolean on whether this column is allowed to be null.
+   * [Returns boolean on whether this column is allowed to be null.]
    *
-   * @return boolean
+   * @return {boolean}
    **/
   _isNullable () {
     return (this.COLUMN_INFO.isNullable === 'YES');
   }
 
   /**
-   * Returns boolean on whether this column is a primary key.
+   * [Returns boolean on whether this column is a primary key.]
    *
-   * @return boolean
+   * @return {boolean}
    **/
   _isPrimaryKey () {
     return this.COLUMN_INFO.isPrimaryKey;
   }
 
   /**
-   * Returns boolean on whether this column is a foreign key.
+   * [Returns boolean on whether this column is a foreign key.]
    *
-   * @return boolean
+   * @return {boolean}
    **/
   _isForeignKey () {
     return this.COLUMN_INFO.isForeignKey;
   }
 
   /**
-   * Returns boolean on whether this column has a SELECT modifier.
+   * [Returns boolean on whether this column has a SELECT modifier.]
    *
-   * @return boolean
+   * @return {boolean}
    **/
   _hasSelectModifier () {
     return (this.COLUMN_INFO.selectModifier !== false);
   }
 
   /**
-   * Returns the SELECT modifier for this column.
+   * [Returns the SELECT modifier for this column.]
    *
-   * @return boolean
+   * @return {boolean}
    **/
   _getSelectModifier () {
     if (!this._hasSelectModifier()) {
@@ -391,10 +400,10 @@ class Column {
   }
 
   /**
-   * Typecast the json input values to their types provided by the data.structure.json.
+   * [Typecast the json input values to their types provided by the data.structure.json.]
    *
-   * @param input mixed
-   * @return mixed
+   * @param {mixed} input [Column value to type cast.]
+   * @return {mixed}
    **/
   _castInput (input) {
     switch(typeof this.simplifiedType) {
@@ -416,10 +425,10 @@ class Column {
 
 class SchemaError extends Error {
   /**
-   * Construct a SchemaError with statusCode for a proper response
+   * [Construct a SchemaError with statusCode for a proper response.]
    *
-   * @param message string
-   * @param statusCode integer
+   * @param {string} message [Error message.]
+   * @param {number} statusCode [Http response code.]
    * @return void
    **/
   constructor (message, statusCode) {

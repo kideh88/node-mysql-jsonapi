@@ -1,5 +1,5 @@
 /**
- * Return proper boolean from json input
+ * Return boolean from json input possibilities
  *
  * @param input string
  * @return boolean
@@ -18,4 +18,13 @@ module.exports.stringToBoolean = function (input) {
     default:
       return Boolean(input);
   }
+};
+
+
+module.exports.isInt = function (input) {
+  if (isNaN(input)) {
+    return false;
+  }
+  let value = parseFloat(input);
+  return (value | 0) === value;
 };

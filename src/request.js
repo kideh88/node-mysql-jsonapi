@@ -16,27 +16,28 @@ class RequestHandler {
 
     this.ALLOWED_METHODS = this.dataHook.NODE_CONFIG.ALLOWED_METHODS;
     this.ALLOWED_CONTENT_TYPE = 'application/vnd.api+json';
-    this.headers = {
-      'Content-Type': 'application/vnd.api+json',
-      'Accept': 'application/vnd.api+json'
-    }
+
   };
 
   /**
-   * Run a node request, given directly through the http request listener.
+   * [Run a node request, given directly through the http request listener.]
    *
-   * @param request object
-   * @param response object
+   * @param {object} request [Node http request object.]
+   * @param {object} response [Node http request object.]
    * @return void
    **/
   run (request, response) {
     let requestData, requestMethod;
     try {
       requestMethod = request.method.toLowerCase();
-      this.methodAllowed(requestMethod);
+      if(request.method === 'OPTIONS') {
+        this.resolveRequest(this.adapterInstance.response(request));
+      } else {
+        this.methodAllowed(requestMethod);
+      }
 
-      requestData = this.queryParser.parseRequest(request.url);
-      this.dataHook.schema._verifyRequestData(requestData);
+      //requestData = this.queryParser.parseRequest(request.url);
+      //this.dataHook.schema._validateRequestData(requestData);
       this.setRequestListeners(request, requestData, response);
     }
     catch (error) {
@@ -45,63 +46,61 @@ class RequestHandler {
   }
 
   /**
-   * Sets all the callbacks for the node request events.
+   * [Sets all the callbacks for the node request events.]
    *
-   * @param request object
-   * @param response object
+   * @param {object} request [Node http request object.]
+   * @param {object} response [Node http request object.]
    * @return void
+   * @throw RequestError
    **/
   setRequestListeners (request, response) {
-    let requestMethod = request.method.toLowerCase();
-    // Set empty object string for JSON.parse.
-    let bodyData = '{}';
-
-    request.on('error', this.requestError);
-    request.on('data', this.requestDataStreamCallback(bodyData));
-    request.on('end', this.requestExecuteCallback(request, requestMethod, requestData, bodyData, response));
+    request.bodyDataStream = '';
+    request.on('error', (error) => {
+      throw new RequestError(error.message, ERROR_CODE.HTTP_BAD_REQUEST);
+    });
+    request.on('data', this.requestDataStreamCallback(request.bodyDataStream));
+    request.on('end', () => {
+      this.adapter.execute(request, this.queryCallback(response));
+    });
   };
 
-  /**
-   * Callback for the node on 'end' event. Executes the request to the database.
-   *
-   * @param request object
-   * @param requestMethod string
-   * @param requestData object
-   * @param bodyData string
-   * @param response object
-   * @return void
-   **/
-  requestExecuteCallback (request, requestMethod, requestData, bodyData, response) {
-    return () => {
-      if (bodyData !== '{}') {
-        this.checkContentHeader(request.headers);
-      }
-      requestData.body = this.getRequestBody(bodyData, requestMethod, requestData);
-      let databaseRequest = new JsonApiQuery(this.dataHook, requestMethod, requestData);
-      this.dataHook.database.execute(databaseRequest, this.queryCallback(response));
-    }
-  }
+  ///**
+  // * [Callback for the node on 'end' event. Executes the request to the database.]
+  // *
+  // * @param {object} request [Node http request object.]
+  // * @param {object} response [Node http request object.]
+  // * @return void
+  // **/
+  //requestExecuteCallback (request, response) {
+  //  return () => {
+  //    //if (bodyData !== '{}') {
+  //    //  this.checkContentHeader(request.headers);
+  //    //}
+  //    //requestData.body = this.getRequestBody(bodyData, requestMethod, requestData);
+  //    //let databaseRequest = new JsonApiQuery(this.dataHook, requestMethod, requestData);
+  //    this.adapter.execute(request, this.queryCallback(response));
+  //    //this.dataHook.database.execute(databaseRequest, this.queryCallback(response));
+  //  }
+  //}
 
   /**
-   * Returns a callback for the database execution call. Handles both erroneous and successful calls.
+   * [Returns a callback for the database execution call. Handles both erroneous and successful calls.]
    *
-   * @param response object
-   * @return void
+   * @param {object} response [Node http request object.]
+   * @return {object} [Callback function for rejecting or resolving a request.]
    **/
   queryCallback (response) {
-    return (databaseResponse) => {
-      if (databaseResponse.error) {
-        let responseData = {}; // THIS WILL BE SERIALIZER CALL!
-        this.rejectRequest(response, responseData)
+    return (adapterResponse) => {
+      if (adapterResponse.errors) {
+        this.rejectRequest(response, adapterResponse);
       } else {
-        let responseData = {}; // THIS WILL BE SERIALIZER CALL!
-        this.resolveRequest(response, responseData);
+        this.resolveRequest(response, adapterResponse);
       }
     }
   }
 
   /**
-   * Parses the given body data and throws RequestError if the given resourceType does not match the endpoint.
+   * [Parses the given body data and throws RequestError if the given resourceType does not match the endpoint.]
    *
    * @param bodyData string
    * @param requestData object
@@ -119,23 +118,23 @@ class RequestHandler {
   }
 
   validateDataMember (body, requestData, isRelationship) {
-    this.verifyObjectProperty(body, ['data']);
+    this.validateObjectProperty(body, ['data']);
     let data = (bodyObject.data instanceof Array ? body.data : [body.data]);
 
     let index;
     for (index in data) {
-      this.verifyObjectProperty(data[index], ['type', 'id']);
+      this.validateObjectProperty(data[index], ['type', 'id']);
       let resourceType = (isRelationship ? this.dataHook.schema[requestData.resourceType]._getRelationshipResourceType(data[index]) : requestData.resourceType);
       this.compareResourceType(data[index], resourceType);
 
       if (data[index].hasOwnProperty('attributes')) {
-        this.dataHook.schema[resourceType]._verifyAttributes(data[index].attributes);
+        this.dataHook.schema[resourceType]._validateAttributes(data[index].attributes);
       }
 
       if (data[index].hasOwnProperty('relationships')) {
         let alias;
         for (alias in data[index].relationships) {
-          this.dataHook.schema[resourceType]._verifyRelationship(alias);
+          this.dataHook.schema[resourceType]._validateRelationship(alias);
           this.validateDataMember(data[index].relationships[alias], requestData, true);
         }
       }
@@ -153,7 +152,7 @@ class RequestHandler {
 
     } else {
       if (requestMethod === 'patch' || requestMethod === 'post') {
-        this.verifyDataMember(body);
+        this.validateDataMember(body);
         if (body.data instanceof Object === false) {
           throw new RequestError('Request `data` Member has to be an instance of `Object`.', ERROR_CODE.HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -168,7 +167,7 @@ class RequestHandler {
 
   }
 
-  verifyObjectProperty (object, attributes, member) {
+  validateObjectProperty (object, attributes, member) {
     let memberLevel = (member ? member : 'Top level');
     let index;
     for (index in attributes) {
@@ -205,16 +204,6 @@ class RequestHandler {
   }
 
   /**
-   * Controlled Error throw from the node 'error' event.
-   *
-   * @param error object
-   * @return void
-   **/
-  requestError (error) {
-    throw new RequestError(error.message, ERROR_CODE.HTTP_BAD_REQUEST);
-  }
-
-  /**
    * Reject request if method is not allowed
    *
    * @param method string
@@ -245,11 +234,10 @@ class RequestHandler {
    * Resolve request with serialized data.
    *
    * @param response object
-   * @param rows object
-   * @param fields object
+   * @param data object
    * @return void
    **/
-  resolveRequest (response, rows, fields) {
+  resolveRequest (response, data) {
     // Always 200?
     response.writeHead(200, this.headers);
     // Needs JSONAPI Serializer here!
